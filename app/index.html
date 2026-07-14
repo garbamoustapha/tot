@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0b1120" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1120'/%3E%3Ccircle cx='11' cy='16' r='5' fill='%2310b981'/%3E%3Ccircle cx='21' cy='16' r='5' fill='%23f43f5e'/%3E%3C/svg%3E" />
+<title>Iterated Prisoner's Dilemma — Tournament Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<!-- p5.js AVANT le loader Monaco : le loader définit l'environnement AMD `define`,
+     ce qui ferait que p5 (UMD) s'enregistrerait comme module AMD au lieu de poser
+     window.p5 (même pième que Chart.js). On charge p5 en premier. -->
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="title">Iterated Prisoner's Dilemma</span>
+      <span class="sub">Tournament Arena</span>
+    </div>
+    <div class="status" id="engineStatus"><span class="dot"></span><span id="engineStatusText">Initialisation…</span></div>
+  </header>
+
+  <main class="workspace">
+
+    <!-- EDITEUR -->
+    <section class="pane">
+      <div class="pane-head">
+        <h2>Votre stratégie</h2>
+        <div class="tabs">
+          <button id="langPython" class="tab active">Python</button>
+          <button id="langCsharp" class="tab">C#</button>
+        </div>
+      </div>
+      <div class="pane-body">
+        <div id="monacoWrap"><div id="monaco"></div></div>
+        <div class="editor-foot">
+          <p class="hint">Votre code affronte les 19 algorithmes de référence en round-robin (chacun contre tous, self-play inclus), sur les manches de 63, 77, 151, 156 et 308 tours. Classement du premier au dernier. <strong>Cliquez une ligne du classement pour visualiser le match animé.</strong></p>
+          <button id="runBtn" class="btn-primary">Entrer dans l'arène</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLASSEMENT / DUELS -->
+    <section class="pane">
+      <div class="pane-head">
+        <div class="tabs view-tabs">
+          <button id="tabRanking" class="tab active" aria-selected="true">Classement</button>
+          <button id="tabDuels" class="tab" aria-selected="false">Duels</button>
+          <button id="tabCodex" class="tab" aria-selected="false">Algorithmes</button>
+        </div>
+        <span class="progress" id="progress"></span>
+      </div>
+      <div class="pane-body">
+        <div id="summary" class="summary hidden"></div>
+        <div class="ranking" id="ranking">
+          <div class="empty">Entrez dans l'arène pour lancer le tournoi<br>et afficher le classement complet (1er → dernier).</div>
+        </div>
+        <div id="duelBar" class="duel-bar-view hidden">
+          <label for="duelViewpoint" class="duel-bar-label">Point de vue</label>
+          <select id="duelViewpoint" aria-label="Algorithme dont on regarde les duels"></select>
+        </div>
+        <div id="duels" class="duels hidden">
+          <div class="empty">Entrez dans l'arène pour voir les duels<br>face à chaque algorithme.</div>
+        </div>
+        <div id="codex" class="codex hidden"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="statusBanner"></div>
+
+<!-- Simulation de match animée -->
+<div id="simModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="simTitle">
+  <div class="modal-card" role="document">
+    <div class="modal-head">
+      <h2 id="simTitle">Simulation de match</h2>
+      <button id="simClose" class="icon-btn" aria-label="Fermer la simulation" title="Fermer">✕</button>
+    </div>
+    <div class="sim-opponents">
+      <label class="sim-field" for="simOppA"><span>Stratégie A</span>
+        <select id="simOppA" aria-label="Stratégie du joueur A"></select>
+      </label>
+      <span class="sim-vs" aria-hidden="true">vs</span>
+      <label class="sim-field" for="simOppB"><span>Stratégie B</span>
+        <select id="simOppB" aria-label="Stratégie du joueur B"></select>
+      </label>
+    </div>
+    <div class="sim-controls">
+      <button id="simPlay" class="btn-ghost sim-prim" aria-label="Lecture ou pause" title="Lecture / Pause">▶︎</button>
+      <button id="simRestart" class="btn-ghost" aria-label="Recommencer le match" title="Recommencer">↻</button>
+      <label class="sim-field"><span>Vitesse</span>
+        <select id="simSpeed"></select>
+      </label>
+      <label class="sim-field"><span>Longueur</span>
+        <select id="simLength"></select>
+      </label>
+      <label class="sim-field"><span>Graine</span>
+        <div class="seed-row">
+          <input id="simSeed" type="number" min="1" step="1" value="1" inputmode="numeric" />
+          <button id="simSeedRand" class="icon-btn" aria-label="Graine aléatoire" title="Graine aléatoire">🎲</button>
+        </div>
+      </label>
+    </div>
+    <div id="simCanvas" class="sim-canvas" role="img" aria-label="Animation du match tour par tour"></div>
+    <div id="simStatus" class="sim-status" aria-live="polite"></div>
+  </div>
+</div>
+
+<script type="module" src="js/ui.js"></script>
+</body>
+</html>

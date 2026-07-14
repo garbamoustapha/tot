@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Monaco minimal test — PD Arena</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<style>
+  :root { --bg: #0b1120; --border: #1e293b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: #e2e8f0; font-family: sans-serif; }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+  header { height: 56px; border-bottom: 1px solid var(--border); display:flex; align-items:center; padding:0 24px; }
+  main { flex:1; display: grid; grid-template-columns: 1fr 1fr; gap:1px; background: var(--border); min-height:0; }
+  .pane { background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .pane-head { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .pane-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  #monacoWrap { flex:1; min-height:0; position:relative; width:100%; height:100%; overflow:hidden; }
+  #monaco { position:absolute; inset:0; width:100%; height:100%; }
+  .log { padding: 10px 20px; font-family: monospace; font-size: 12px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>Test minimal Monaco Editor (même layout que l'arène)</header>
+  <main>
+    <section class="pane">
+      <div class="pane-head">Éditeur</div>
+      <div class="pane-body">
+        <div id="monacoWrap"><div id="monaco"></div></div>
+      </div>
+    </section>
+    <section class="pane">
+      <div class="pane-head">Logs</div>
+      <div class="pane-body" id="logs" style="overflow:auto; padding:10px 20px; font-family:monospace; font-size:12px;"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+function log(msg) {
+  const el = document.getElementById('logs');
+  const line = document.createElement('div');
+  line.textContent = msg;
+  el.appendChild(line);
+  console.log(msg);
+}
+
+const MONACO_BASE_URL = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/';
+
+// Bypass same-origin restriction on workers when opened via file://
+window.MonacoEnvironment = window.MonacoEnvironment || {};
+window.MonacoEnvironment.getWorkerUrl = function (_workerId, _label) {
+  return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+    self.MonacoEnvironment = { baseUrl: '${MONACO_BASE_URL}' };
+    importScripts('${MONACO_BASE_URL}vs/base/worker/workerMain.js');
+  `)}`;
+};
+
+require.config({ paths: { vs: MONACO_BASE_URL + 'vs' } });
+require(['vs/editor/editor.main'], () => {
+  log('Monaco editor.main loaded');
+
+  monaco.editor.defineTheme('arena', {
+    base: 'vs-dark', inherit: true,
+    rules: [{ token: '', foreground: 'cbd5e1' }],
+    colors: {
+      'editor.background': '#0b1120',
+      'editorGutter.background': '#0b1120',
+      'editorLineNumber.foreground': '#475569',
+      'editor.lineHighlightBackground': '#111a2e',
+      'editorCursor.foreground': '#f43f5e',
+    },
+  });
+
+  const wrap = document.getElementById('monacoWrap');
+  const rect = wrap.getBoundingClientRect();
+  log('Wrap size before create: ' + rect.width + 'x' + rect.height);
+
+  const editor = monaco.editor.create(document.getElementById('monaco'), {
+    value: '# Cliquez ici et tapez du texte.\n# Le curseur doit bouger.',
+    language: 'python',
+    theme: 'arena',
+    fontSize: 13,
+    fontFamily: 'JetBrains Mono',
+    minimap: { enabled: false },
+    automaticLayout: false,
+    scrollBeyondLastLine: false,
+    padding: { top: 14, bottom: 14 },
+    lineNumbers: 'on',
+  });
+
+  log('Editor created');
+  requestAnimationFrame(() => {
+    editor.layout();
+    const r2 = wrap.getBoundingClientRect();
+    log('After rAF layout: ' + r2.width + 'x' + r2.height);
+  });
+
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => { editor.layout(); log('Fonts ready, layout() called'); });
+  }
+
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => editor.layout()).observe(wrap);
+  }
+
+  editor.onDidChangeCursorPosition((e) => {
+    log('Cursor moved: L' + e.position.lineNumber + ' C' + e.position.column);
+  });
+
+  editor.onDidFocusEditorText(() => log('Editor focused'));
+  editor.onDidBlurEditorText(() => log('Editor blurred'));
+});
+</script>
+</body>
+</html>

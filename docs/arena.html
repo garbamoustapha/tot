@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Prisoner's Dilemma Arena — Code Battle</title>
+
+<!-- Tailwind CSS (CDN, config dark + thème gaming) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          ink:    { 900: '#0a0e14', 800: '#0f1623', 700: '#162032', 600: '#1d2a40' },
+          neon:   { coop: '#22d3ee', defect: '#f43f5e', gold: '#f5b301', violet: '#a855f7' },
+        },
+        fontFamily: {
+          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          display: ['Orbitron', 'system-ui', 'sans-serif'],
+        },
+      }
+    }
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet" />
+
+<!-- Monaco Editor (CDN) -->
+<link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+
+<!-- Chart.js pour la courbe de coopération -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  body { background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(168,85,247,.15), transparent),
+      radial-gradient(1000px 500px at -10% 110%, rgba(34,211,238,.12), transparent),
+      #0a0e14; }
+  .grid-bg { background-image:
+      linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 32px 32px; }
+  .glow-coop  { box-shadow: 0 0 18px rgba(34,211,238,.55); }
+  .glow-defect { box-shadow: 0 0 18px rgba(244,63,94,.55); }
+  .panel { background: linear-gradient(180deg, rgba(22,32,50,.85), rgba(15,22,35,.85));
+           border: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(6px); }
+  .chip { border: 1px solid rgba(255,255,255,.12); }
+  .scanline::after { content:""; position:absolute; inset:0; pointer-events:none;
+      background: repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 2px, transparent 2px 4px); }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #1d2a40; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:.45} }
+  .live-dot { animation: pulse-soft 1.1s infinite; }
+</style>
+</head>
+
+<body class="min-h-screen text-slate-200 font-mono grid-bg">
+
+<!-- ============================ HEADER ============================ -->
+<header class="border-b border-white/10 bg-ink-900/70 backdrop-blur sticky top-0 z-30">
+  <div class="max-w-[1600px] mx-auto px-6 h-16 flex items-center gap-6">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-neon-coop to-neon-violet grid place-items-center font-display font-extrabold text-ink-900">PD</div>
+      <div>
+        <h1 class="font-display text-lg leading-none tracking-widest text-white">PRISONER'S&nbsp;DILEMMA</h1>
+        <p class="text-[11px] text-slate-400 tracking-[.3em]">CODE&nbsp;BATTLE&nbsp;ARENA</p>
+      </div>
+    </div>
+    <nav class="ml-6 flex gap-1 text-sm">
+      <button data-view="arena"   class="nav-btn px-4 py-2 rounded-md bg-white/10 text-white">Arène</button>
+      <button data-view="hall"    class="nav-btn px-4 py-2 rounded-md hover:bg-white/5 text-slate-300">Hall des Challenges</button>
+    </nav>
+    <div class="ml-auto flex items-center gap-4 text-xs">
+      <span class="flex items-center gap-2 text-neon-coop"><span class="h-2 w-2 rounded-full bg-neon-coop live-dot"></span>ENGINE&nbsp;ONLINE</span>
+      <span class="text-slate-400">T=5 · R=3 · P=1 · S=0</span>
+      <div class="h-8 w-8 rounded-full bg-neon-violet/30 grid place-items-center text-neon-violet font-bold">G</div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ VIEW: ARENA ============================ -->
+<main id="view-arena" class="max-w-[1600px] mx-auto px-6 py-6">
+  <div class="grid grid-cols-12 gap-4 h-[calc(100vh-7rem)]">
+
+    <!-- ===== Colonne 1 : Éditeur de code ===== -->
+    <section class="col-span-5 panel rounded-xl flex flex-col overflow-hidden scanline relative">
+      <div class="flex items-center gap-2 px-4 h-11 border-b border-white/10 bg-ink-800/60">
+        <span class="h-3 w-3 rounded-full bg-neon-defect/80"></span>
+        <span class="h-3 w-3 rounded-full bg-neon-gold/80"></span>
+        <span class="h-3 w-3 rounded-full bg-neon-coop/80"></span>
+        <span class="ml-3 text-xs tracking-widest text-slate-400">STRATEGY.JS &nbsp;—&nbsp; <span id="langLabel" class="text-neon-coop">PYTHON</span></span>
+        <div class="ml-auto flex gap-2 text-xs">
+          <button id="langPython" class="lang-btn px-3 py-1 rounded bg-neon-coop/15 text-neon-coop chip">Python</button>
+          <button id="langCsharp" class="lang-btn px-3 py-1 rounded text-slate-300 chip hover:bg-white/5">C#</button>
+        </div>
+      </div>
+      <div id="monaco" class="flex-1"></div>
+      <div class="flex items-center gap-3 px-4 h-12 border-t border-white/10 bg-ink-800/60 text-xs">
+        <button class="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 chip">⬆ Importer .py</button>
+        <button id="formatBtn" class="px-3 py-1.5 rounded bg-white/5 hover:bg-white/10 chip">Formatter</button>
+        <span class="ml-auto text-slate-500">Signature: <span class="text-slate-300">decide(opponent_last_move, current_turn, my_score, opponent_score, random_value, my_last_move) → 0|1</span></span>
+      </div>
+    </section>
+
+    <!-- ===== Colonne 2 : Config de l'arène ===== -->
+    <section class="col-span-3 panel rounded-xl flex flex-col overflow-hidden">
+      <div class="px-4 h-11 border-b border-white/10 bg-ink-800/60 flex items-center text-xs tracking-widest text-slate-400">CONFIG&nbsp;DE&nbsp;L'ARÈNE</div>
+      <div class="p-4 space-y-4 overflow-auto text-sm">
+
+        <div>
+          <p class="text-xs text-slate-400 mb-2">ADVERSAIRE PRÉDÉFINI</p>
+          <div id="opponentList" class="space-y-2">
+            <!-- chips adversaires injectées en JS -->
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs text-slate-400 mb-2">LONGUEURS DE MANCHES (tours)</p>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <label class="chip rounded px-2 py-1"><input type="checkbox" checked class="accent-neon-coop mr-1">63</label>
+            <label class="chip rounded px-2 py-1"><input type="checkbox" checked class="accent-neon-coop mr-1">77</label>
+            <label class="chip rounded px-2 py-1"><input type="checkbox" checked class="accent-neon-coop mr-1">151</label>
+            <label class="chip rounded px-2 py-1"><input type="checkbox" checked class="accent-neon-coop mr-1">156</label>
+            <label class="chip rounded px-2 py-1"><input type="checkbox" checked class="accent-neon-coop mr-1">308</label>
+          </div>
+        </div>
+
+        <div>
+          <p class="text-xs text-slate-400 mb-2">RÉPÉTITIONS (robustesse)</p>
+          <input type="range" min="1" max="50" value="10" id="reps" class="w-full accent-neon-violet">
+          <p class="text-xs text-slate-500 text-right"><span id="repsVal">10</span> × par longueur</p>
+        </div>
+
+        <div>
+          <p class="text-xs text-slate-400 mb-2">BRUIT (probabilité d'erreur)</p>
+          <input type="range" min="0" max="20" value="0" id="noise" class="w-full accent-neon-gold">
+          <p class="text-xs text-slate-500 text-right"><span id="noiseVal">0</span>%</p>
+        </div>
+
+        <button id="runBtn" class="w-full py-3 rounded-lg font-display tracking-widest text-ink-900 bg-gradient-to-r from-neon-coop to-neon-violet hover:brightness-110 transition">
+          ⚔ LANCER LE COMBAT
+        </button>
+        <button id="stepBtn" class="w-full py-2 rounded-lg text-xs chip hover:bg-white/5">▶ Pas à pas</button>
+      </div>
+    </section>
+
+    <!-- ===== Colonne 3 : Visualisation (l'arène) ===== -->
+    <section class="col-span-4 panel rounded-xl flex flex-col overflow-hidden">
+      <div class="px-4 h-11 border-b border-white/10 bg-ink-800/60 flex items-center justify-between text-xs tracking-widest text-slate-400">
+        <span>VISUALISATION</span>
+        <span id="turnBadge" class="text-neon-coop">TOUR 0 / 0</span>
+      </div>
+
+      <!-- Duel arena visuelle -->
+      <div class="p-5 grid grid-cols-2 gap-4">
+        <!-- Joueur -->
+        <div class="text-center">
+          <p class="text-xs text-slate-400 mb-1">VOUS</p>
+          <div id="cardPlayer" class="aspect-square rounded-xl panel grid place-items-center relative">
+            <div id="movePlayer" class="h-24 w-24 rounded-full bg-ink-700 grid place-items-center text-4xl">?</div>
+          </div>
+          <p class="mt-2 font-display text-2xl text-neon-coop" id="scorePlayer">0</p>
+          <p class="text-[11px] text-slate-500">PYTHON · TFT</p>
+        </div>
+        <!-- Adversaire -->
+        <div class="text-center">
+          <p class="text-xs text-slate-400 mb-1" id="oppName">TIT FOR TAT</p>
+          <div id="cardOpp" class="aspect-square rounded-xl panel grid place-items-center relative">
+            <div id="moveOpp" class="h-24 w-24 rounded-full bg-ink-700 grid place-items-center text-4xl">?</div>
+          </div>
+          <p class="mt-2 font-display text-2xl text-neon-defect" id="scoreOpp">0</p>
+          <p class="text-[11px] text-slate-500">BUILTIN</p>
+        </div>
+      </div>
+
+      <!-- Bandeau choix immédiats -->
+      <div class="px-5 pb-3 grid grid-cols-2 gap-4 text-center text-xs">
+        <div class="chip rounded-md py-2"><span class="text-slate-400">Dernier coup joueur :</span> <span id="lastPlayer" class="text-neon-coop">—</span></div>
+        <div class="chip rounded-md py-2"><span class="text-slate-400">Dernier coup adv. :</span> <span id="lastOpp" class="text-neon-defect">—</span></div>
+      </div>
+
+      <!-- Courbe de coopération -->
+      <div class="px-5 pb-2 flex-1 min-h-0">
+        <p class="text-xs text-slate-400 mb-1">TENDANCE DE LA COOPÉRATION</p>
+        <div class="h-[150px]"><canvas id="coopChart"></canvas></div>
+      </div>
+
+      <!-- Log des tours -->
+      <div class="border-t border-white/10 bg-ink-900/60 p-3 h-28 overflow-auto text-[11px]" id="logBox">
+        <span class="text-slate-500">// En attente du lancement du combat…</span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ============================ VIEW: HALL OF CHALLENGES ============================ -->
+<main id="view-hall" class="max-w-[1600px] mx-auto px-6 py-6 hidden">
+  <div class="grid grid-cols-12 gap-4">
+
+    <!-- Leaderboard global -->
+    <section class="col-span-8 panel rounded-xl overflow-hidden">
+      <div class="px-5 h-12 border-b border-white/10 bg-ink-800/60 flex items-center justify-between">
+        <h2 class="font-display tracking-widest text-sm">🏆 LEADERBOARD GLOBAL</h2>
+        <span class="text-xs text-slate-400">Score moyen · round-robin · 63·77·151·156·308</span>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="text-[11px] uppercase tracking-wider text-slate-500 bg-ink-800/40">
+          <tr>
+            <th class="text-left px-5 py-2 w-12">#</th>
+            <th class="text-left py-2">Joueur</th>
+            <th class="text-left py-2">Stratégie</th>
+            <th class="text-left py-2">Lang</th>
+            <th class="text-right py-2">Matchs</th>
+            <th class="text-right py-2">Score moy.</th>
+            <th class="text-right px-5 py-2">Tendance</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody" class="divide-y divide-white/5"></tbody>
+      </table>
+    </section>
+
+    <!-- Matchmaker de duel -->
+    <section class="col-span-4 panel rounded-xl overflow-hidden">
+      <div class="px-5 h-12 border-b border-white/10 bg-ink-800/60 flex items-center font-display tracking-widest text-sm">⚔ MATCHMAKER DE DUEL</div>
+      <div class="p-5 space-y-4 text-sm">
+        <p class="text-slate-400 text-xs">Sélectionnez un comportement de la communauté pour un affrontement direct « Mon Code vs Son Code » et analyser ses failles de logique.</p>
+        <select id="duelTarget" class="w-full bg-ink-700 chip rounded-md px-3 py-2 outline-none focus:border-neon-coop"></select>
+        <div class="chip rounded-lg p-4 bg-ink-900/40 text-center">
+          <p class="text-xs text-slate-400 mb-2">Aperçu</p>
+          <div class="flex items-center justify-center gap-3 font-display">
+            <span class="text-neon-coop">VOUS</span>
+            <span class="text-slate-500">VS</span>
+            <span class="text-neon-defect" id="duelTargetName">—</span>
+          </div>
+        </div>
+        <label class="block text-xs text-slate-400">Longueur (tours)
+          <select class="mt-1 w-full bg-ink-700 chip rounded-md px-3 py-2 outline-none">
+            <option>63</option><option>77</option><option>151</option><option>156</option><option>308</option><option>Aléatoire</option>
+          </select>
+        </label>
+        <button class="w-full py-3 rounded-lg font-display tracking-widest text-ink-900 bg-gradient-to-r from-neon-gold to-neon-defect hover:brightness-110">LANCER LE DUEL</button>
+        <p class="text-[11px] text-slate-500">Le duel s'exécute en sandbox serveur (gVisor) pour un résultat certifié anti-triche.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<!-- ============================ SCRIPTS ============================ -->
+<script>
+// ---- Navigation entre vues ----
+const navBtns = document.querySelectorAll('.nav-btn');
+navBtns.forEach(b => b.addEventListener('click', () => {
+  const v = b.dataset.view;
+  document.getElementById('view-arena').classList.toggle('hidden', v !== 'arena');
+  document.getElementById('view-hall').classList.toggle('hidden', v !== 'hall');
+  navBtns.forEach(x => x.classList.remove('bg-white/10','text-white'));
+  navBtns.forEach(x => x.classList.add('text-slate-300','hover:bg-white/5'));
+  b.classList.add('bg-white/10','text-white'); b.classList.remove('text-slate-300','hover:bg-white/5');
+}));
+
+// ---- Adversaires prédéfinis (portés de TourExec) ----
+const OPPONENTS = [
+  { id:'tft',     name:'Tit for Tat',     desc:'Nice · copie le dernier coup' },
+  { id:'tf2t',    name:'Tit for Two Tats',desc:'Pardonneresse · trahit après 2 trahisons' },
+  { id:'pavlov',  name:'Pavlov',          desc:'Win-Stay / Lose-Shift' },
+  { id:'k42r',    name:'k42r (Borufsen)', desc:'TFT + détection aléatoires/défectifs' },
+  { id:'champion',name:'Champion Axelrod',desc:'TFT avec perturbation stratégique' },
+  { id:'random',  name:'Random',          desc:'Stochastique pur' },
+];
+let selectedOpp = 'tft';
+const oppList = document.getElementById('opponentList');
+OPPONENTS.forEach(o => {
+  const el = document.createElement('label');
+  el.className = 'opp-chip flex items-center gap-3 chip rounded-lg px-3 py-2 cursor-pointer hover:bg-white/5 transition';
+  el.innerHTML = `
+    <input type="radio" name="opp" value="${o.id}" class="accent-neon-coop" ${o.id==='tft'?'checked':''}>
+    <span class="flex-1">
+      <span class="block text-slate-200">${o.name}</span>
+      <span class="block text-[11px] text-slate-500">${o.desc}</span>
+    </span>`;
+  el.querySelector('input').addEventListener('change', e => {
+    selectedOpp = e.target.value;
+    document.getElementById('oppName').textContent = OPPONENTS.find(x=>x.id===selectedOpp).name.toUpperCase();
+  });
+  oppList.appendChild(el);
+});
+
+// ---- Templates de code (chargés dans Monaco) ----
+const TEMPLATES = {
+  python: `# Tit for Tat — Axelrod / TourExec (KTitForTatC)
+COOPERATE, DEFECT = 0, 1
+
+class Player:
+    def __init__(self):
+        self.cooperation_count = 0
+        self.defection_count   = 0
+        self.opponent_history  = []
+
+    def decide(self, opponent_last_move, current_turn,
+               my_score, opponent_score, random_value, my_last_move):
+        # 1) Premier tour : pas d'historique -> on coopere (nice)
+        if current_turn == 1 or opponent_last_move is None:
+            return COOPERATE
+
+        # 2) Memoire de l'adversaire
+        self.opponent_history.append(opponent_last_move)
+        if opponent_last_move == COOPERATE:
+            self.cooperation_count += 1
+        else:
+            self.defection_count += 1
+
+        # 3) Tit for Tat : copier le dernier coup de l'adversaire
+        return opponent_last_move
+`,
+  csharp: `// Tit for Tat — Axelrod / TourExec (KTitForTatC)
+using System;
+
+public class Player
+{
+    private int _cooperationCount = 0;
+    private int _defectionCount   = 0;
+    private const int Cooperate = 0;
+    private const int Defect    = 1;
+
+    public int Decide(int opponentLastMove, int currentTurn,
+                      int myScore, int opponentScore,
+                      double randomValue, int myLastMove)
+    {
+        // 1) Premier tour : pas d'historique -> on coopere (nice)
+        if (currentTurn == 1 || opponentLastMove < 0)
+            return Cooperate;
+
+        // 2) Memoire de l'adversaire
+        if (opponentLastMove == Cooperate) _cooperationCount++;
+        else                                _defectionCount++;
+
+        // 3) Tit for Tat : copier le dernier coup de l'adversaire
+        return opponentLastMove;
+    }
+}
+`
+};
+
+// ---- Monaco ----
+let editor, model;
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
+require(['vs/editor/editor.main'], function () {
+  monaco.editor.defineTheme('arena-dark', {
+    base: 'vs-dark', inherit: true,
+    rules: [{ token:'', foreground:'c9d1d9' }],
+    colors: { 'editor.background':'#0f162300', 'editorGutter.background':'#0f162300' }
+  });
+  model = monaco.editor.createModel(TEMPLATES.python, 'python');
+  editor = monaco.editor.create(document.getElementById('monaco'), {
+    model, theme: 'arena-dark', fontSize: 13, fontFamily: 'JetBrains Mono',
+    minimap: { enabled:false }, automaticLayout: true,
+    scrollBeyondLastLine: false, padding: { top: 12 },
+    lineNumbers: 'on', renderLineHighlight: 'all',
+  });
+});
+
+function setLang(lang) {
+  if (!model) return;
+  model.setValue(TEMPLATES[lang]);
+  monaco.editor.setModelLanguage(model, lang === 'python' ? 'python' : 'csharp');
+  document.getElementById('langLabel').textContent = lang.toUpperCase();
+  document.getElementById('langPython').className = 'lang-btn px-3 py-1 rounded chip ' +
+    (lang==='python' ? 'bg-neon-coop/15 text-neon-coop' : 'text-slate-300 hover:bg-white/5');
+  document.getElementById('langCsharp').className = 'lang-btn px-3 py-1 rounded chip ' +
+    (lang==='csharp' ? 'bg-neon-coop/15 text-neon-coop' : 'text-slate-300 hover:bg-white/5');
+}
+document.getElementById('langPython').onclick = () => setLang('python');
+document.getElementById('langCsharp').onclick = () => setLang('csharp');
+document.getElementById('formatBtn').onclick  = () => editor && editor.getAction('editor.action.formatDocument').run();
+
+// ---- Chart.js : courbe de coopération ----
+const ctx = document.getElementById('coopChart').getContext('2d');
+const coopChart = new Chart(ctx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label:'Joueur',   data:[], borderColor:'#22d3ee', backgroundColor:'rgba(34,211,238,.15)', tension:.35, pointRadius:0, borderWidth:2 },
+    { label:'Adversaire', data:[], borderColor:'#f43f5e', backgroundColor:'rgba(244,63,94,.15)', tension:.35, pointRadius:0, borderWidth:2 },
+  ]},
+  options: {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    scales: { x:{ display:false }, y:{ min:0, max:1, ticks:{ stepSize:1, color:'#64748b', callback:v=>v?'TRAHIR':'COOP' }, grid:{ color:'rgba(255,255,255,.05)' } } },
+    plugins: { legend:{ labels:{ color:'#94a3b8', boxWidth:10, font:{ size:10 } } } }
+  }
+});
+
+// ---- Sliders ----
+const reps=document.getElementById('reps'), repsVal=document.getElementById('repsVal');
+reps.oninput=()=>repsVal.textContent=reps.value;
+const noise=document.getElementById('noise'), noiseVal=document.getElementById('noiseVal');
+noise.oninput=()=>noiseVal.textContent=noise.value;
+
+// ---- Log box ----
+const logBox=document.getElementById('logBox');
+function log(msg, cls='text-slate-400'){
+  const p=document.createElement('div'); p.className=cls; p.textContent=msg;
+  logBox.appendChild(p); logBox.scrollTop=logBox.scrollHeight;
+}
+
+// ---- Stratégies builtin (JS pour la démo live) ----
+const BUILTIN = {
+  tft:     (opp,turn,_,__,___,my) => (turn===1||opp==null)?0:opp,
+  tf2t:    (opp,turn,_,__,___,my) => (turn===1||opp==null)?0:(opp===1?1:0),  // simplifié démo
+  pavlov:  (opp,turn,_,__,___,my) => (turn===1||my==null)?0:((my===0&&opp===0)||(my===1&&opp===0)?my:1-my),
+  k42r:    (opp,turn,_,__,r,my)   => (turn===1||opp==null)?0:opp,
+  champion:(opp,turn,_,__,r,my)   => (turn===1||opp==null)?0:opp,
+  random:  (opp,turn,_,__,r,my)   => r<0.5?0:1,
+};
+// Joueur = le code édité (TFT pour la démo; en prod: runner Wasm/serveur)
+const PLAYER_FN = (opp,turn,_,__,r,my) => (turn===1||opp==null)?0:opp;
+
+// ---- Boucle de simulation (démo) ----
+const PAY = { '00':[3,3], '11':[1,1], '01':[5,0], '10':[0,5] }; // [player, opp]
+let simTimer=null;
+function setMove(el, move){
+  el.textContent = move===0 ? 'C' : (move===1 ? 'D' : '?');
+  el.className = 'h-24 w-24 rounded-full grid place-items-center text-4xl font-display ' +
+    (move===0 ? 'bg-neon-coop/20 text-neon-coop glow-coop' :
+     move===1 ? 'bg-neon-defect/20 text-neon-defect glow-defect' : 'bg-ink-700 text-slate-500');
+}
+function runMatch(){
+  if(simTimer) clearInterval(simTimer);
+  const len = 63;
+  let turn=1, lastP=null, lastO=null, sP=0, sO=0;
+  logBox.innerHTML='';
+  coopChart.data.labels=[]; coopChart.data.datasets[0].data=[]; coopChart.data.datasets[1].data=[]; coopChart.update('none');
+  document.getElementById('scorePlayer').textContent='0';
+  document.getElementById('scoreOpp').textContent='0';
+  document.getElementById('turnBadge').textContent=`TOUR 0 / ${len}`;
+  log(`▶ Démarrage : VOUS vs ${OPPONENTS.find(o=>o.id===selectedOpp).name} · ${len} tours`,'text-neon-violet');
+
+  const oppFn = BUILTIN[selectedOpp];
+  simTimer = setInterval(()=>{
+    if(turn>len){ clearInterval(simTimer);
+      const win = sP>sO?'VICTOIRE':sP<sO?'DÉFAITE':'ÉGALITÉ';
+      log(`■ FIN — Joueur ${sP} / Adversaire ${sO} → ${win}`, win==='VICTOIRE'?'text-neon-coop font-bold':win==='DÉFAITE'?'text-neon-defect font-bold':'text-neon-gold');
+      return; }
+    const mvP = PLAYER_FN(lastO, turn, sP, sO, Math.random(), lastP);
+    let   mvO = oppFn(lastP, turn, sO, sP, Math.random(), lastO);
+    mvP=mvP===1?1:0; mvO=mvO===1?1:0;
+    const [gP,gO] = PAY[`${mvP}${mvO}`];
+    sP+=gP; sO+=gO;
+    setMove(document.getElementById('movePlayer'), mvP);
+    setMove(document.getElementById('moveOpp'), mvO);
+    document.getElementById('lastPlayer').textContent = mvP?'TRAHIR':'COOPÉRER';
+    document.getElementById('lastOpp').textContent    = mvO?'TRAHIR':'COOPÉRER';
+    document.getElementById('scorePlayer').textContent = sP;
+    document.getElementById('scoreOpp').textContent     = sO;
+    document.getElementById('turnBadge').textContent = `TOUR ${turn} / ${len}`;
+    coopChart.data.labels.push(turn);
+    coopChart.data.datasets[0].data.push(mvP);
+    coopChart.data.datasets[1].data.push(mvO);
+    coopChart.update('none');
+    log(`T${String(turn).padStart(3,'0')}  Joueur=${mvP?'D':'C'}  Adv=${mvO?'D':'C'}  (+${gP}/+${gO})  → ${sP} / ${sO}`);
+    lastP=mvP; lastO=mvO; turn++;
+  }, 120);
+}
+document.getElementById('runBtn').onclick = runMatch;
+
+// ---- Leaderboard mock + matchmaker ----
+const LB = [
+  { rank:1, player:'NashEquilibrium', strat:'AdaptiveTFT', lang:'C#',     matches:312, score:487.3, trend:'▲' },
+  { rank:2, player:'Borufsen_Fan',    strat:'k42r-clone',  lang:'Python', matches:298, score:471.9, trend:'▲' },
+  { rank:3, player:'CooperationKid',  strat:'TitForTat',   lang:'Python', matches:341, score:453.0, trend:'—' },
+  { rank:4, player:'DefectorPrime',   strat:'AlwaysDefect',lang:'C#',     matches:276, score:241.4, trend:'▼' },
+  { rank:5, player:'StochasticSam',   strat:'EpsilonGreedy',lang:'Python',matches:263, score:388.7, trend:'▲' },
+  { rank:6, player:'PavlovReturns',   strat:'Pavlov2000',  lang:'C#',     matches:251, score:422.1, trend:'—' },
+];
+const tbody=document.getElementById('leaderboardBody');
+LB.forEach(r=>{
+  const tr=document.createElement('tr'); tr.className='hover:bg-white/5';
+  const medal = r.rank===1?'text-neon-gold':r.rank===2?'text-slate-300':r.rank===3?'text-amber-700':'text-slate-500';
+  tr.innerHTML=`
+    <td class="px-5 py-3 font-display ${medal}">${r.rank}</td>
+    <td class="py-3 text-white">${r.player}</td>
+    <td class="py-3 text-slate-300">${r.strat}</td>
+    <td class="py-3"><span class="chip rounded px-2 py-0.5 text-[11px] ${r.lang==='C#'?'text-neon-violet':'text-neon-coop'}">${r.lang}</span></td>
+    <td class="py-3 text-right text-slate-400">${r.matches}</td>
+    <td class="py-3 text-right font-display text-white">${r.score.toFixed(1)}</td>
+    <td class="px-5 py-3 text-right ${r.trend==='▲'?'text-neon-coop':r.trend==='▼'?'text-neon-defect':'text-slate-500'}">${r.trend}</td>`;
+  tbody.appendChild(tr);
+});
+const sel=document.getElementById('duelTarget');
+LB.forEach(r=>{
+  const o=document.createElement('option'); o.value=r.player; o.textContent=`${r.player} — ${r.strat}`; sel.appendChild(o);
+});
+sel.onchange=()=>document.getElementById('duelTargetName').textContent=sel.value.split(' — ')[0].toUpperCase();
+sel.dispatchEvent(new Event('change'));
+</script>
+</body>
+</html>

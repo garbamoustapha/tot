@@ -1,0 +1,44 @@
+# --- Build artifacts (TourExec: gfortran) ---
+TourExec/bin/
+TourExec/obj/
+*.o
+*.so
+*.exe
+*.mod
+
+# --- Node / JS tooling ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+.pnpm-store/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+
+# --- Claude local-only settings (keep shared settings.json, ignore per-machine) ---
+.claude/settings.local.json
+.claude/projects/
+
+# --- Logs / temp ---
+*.log
+tmp/
+.tmp/
