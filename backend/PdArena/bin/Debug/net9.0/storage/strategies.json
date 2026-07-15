@@ -1,0 +1,52 @@
+[
+  {
+    "Id": "u_aceefabe10c8",
+    "PlayerName": "Ada",
+    "AlgoName": "SweetTooth",
+    "IconId": "fox",
+    "IconGlyph": "\uD83E\uDD8A",
+    "Code": "using System;\npublic class Player {\n  private int _streak=0;\n  public int Decide(int o,int t,int me,int opp,double r,int my){\n    if(t==1||o\u003C0) return 0;\n    if(o==1){_streak\u002B\u002B; return 1;}\n    _streak=0; return 0;\n  }\n}",
+    "CodeHash": "aceefabe10c8d000944f664b095d0ab5b59f4e781e17c80d439d5c01cb81bf94",
+    "SubmittedAt": "2026-07-14T16:45:37.1377417Z"
+  },
+  {
+    "Id": "u_4ccb92ae2018",
+    "PlayerName": "Grace",
+    "AlgoName": "PavlovGrace",
+    "IconId": "gem",
+    "IconGlyph": "\uD83D\uDC8E",
+    "Code": "// Strat\u00E9gie pour l\u0027ar\u00E8ne en ligne (C#, ex\u00E9cut\u00E9e sur le serveur).\n// Classe OBLIGATOIRE nomm\u00E9e \u0022Player\u0022 avec une m\u00E9thode \u0022Decide\u0022.\n// 0 = Coop\u00E9rer, 1 = Trahir. -1 = pas de coup pr\u00E9c\u00E9dent (tour 1).\n// Interdit : acc\u00E8s r\u00E9seau, fichier, processus, r\u00E9flexion (validation \u002B timeout).\n\nusing System;\n\npublic class Player\n{\n    private int _defectStreak = 0;\n\n    public int Decide(\n        int opponentLastMove, int currentTurn, int myScore,\n        int opponentScore, double randomValue, int myLastMove)\n    {\n        // Premier tour : pas d\u0027historique \u2014 une strat\u00E9gie \u0022nice\u0022 coop\u00E8re.\n        if (currentTurn == 1 || opponentLastMove \u003C 0) return 0;\n\n        // Tit for Tat : copie le dernier coup de l\u0027adversaire.\n        if (opponentLastMove == 1) { _defectStreak\u002B\u002B; return 1; }\n        _defectStreak = 0;\n        return 0;\n\n        // Variantes : Pavlov, GrimTrigger, Joss\u2026 exp\u00E9rimentez !\n    }\n}",
+    "CodeHash": "4ccb92ae20183fddd780d6556f0f2be3ccac48c8ac3db7022f117f55886204e6",
+    "SubmittedAt": "2026-07-14T17:00:18.2393955Z"
+  },
+  {
+    "Id": "u_1d955d8e1e4c",
+    "PlayerName": "ClaudeTest",
+    "AlgoName": "EchoBot",
+    "IconId": "owl",
+    "IconGlyph": "\uD83E\uDD89",
+    "Code": "using System;\npublic class Player\n{\n    public int Decide(int opponentLastMove, int currentTurn, int myScore, int opponentScore, double randomValue, int myLastMove)\n    {\n        if (currentTurn == 1 || opponentLastMove \u003C 0) return 0;\n        return opponentLastMove;\n    }\n}",
+    "CodeHash": "1d955d8e1e4c449476a20c42d83d2ab337e2643fcfe9cd5c5128f1829c140126",
+    "SubmittedAt": "2026-07-14T17:13:25.9864242Z"
+  },
+  {
+    "Id": "u_56ee936091e8",
+    "PlayerName": "E2E_Bot",
+    "AlgoName": "EchoTFT",
+    "IconId": "fox",
+    "IconGlyph": "\uD83E\uDD8A",
+    "Code": "using System;\npublic class Player {\n  public int Decide(int o, int t, int ms, int os, double r, int ml) {\n    if (t == 1 || o \u003C 0) return 0;\n    return o; // TFT\n  }\n}",
+    "CodeHash": "56ee936091e887a92af89628cd7143dcadc8d63b9129ef21834864873595f8fa",
+    "SubmittedAt": "2026-07-14T17:57:24.172187Z"
+  },
+  {
+    "Id": "u_826a40ba936b",
+    "PlayerName": "RT_Bot",
+    "AlgoName": "RtEcho",
+    "IconId": "bolt",
+    "IconGlyph": "\u26A1",
+    "Code": "using System; public class Player { public int Decide(int o,int t,int ms,int os,double r,int ml){ if(t==1||o\u003C0) return 0; return o; } }",
+    "CodeHash": "826a40ba936bc0c67fe9808c1b08134b7a4129a08ab1e17edf922445d79033e5",
+    "SubmittedAt": "2026-07-14T21:13:00.1657442Z"
+  }
+]

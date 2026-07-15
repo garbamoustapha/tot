@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0b1120" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1120'/%3E%3Ccircle cx='11' cy='16' r='5' fill='%2310b981'/%3E%3Ccircle cx='21' cy='16' r='5' fill='%23f43f5e'/%3E%3C/svg%3E" />
+<title>Online Arena — Prisoner's Dilemma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<!-- Client SignalR officiel (temps réel) — servi localement pour fiabilité. -->
+<script src="js/vendor/signalr.min.js"></script>
+<!-- p5.js (UMD) pour l'animation des matchs au clic sur une ligne (builtin vs builtin). -->
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="arena.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <nav class="tabbar" aria-label="Navigation principale">
+      <a class="tabbar-brand" href="index.html">PD Arena</a>
+      <a class="tabbar-tab" data-tab="solo" href="index.html"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r="1" fill="currentColor" stroke="none"/></svg> Solo</a>
+      <a class="tabbar-tab active" data-tab="online" href="arena.html" aria-current="page"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Arène en ligne</a>
+      <a class="tabbar-tab" data-tab="codex" href="index.html#codex"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.5-4-2-7-2v14c3 0 5.5.5 7 2 1.5-1.5 4-2 7-2V5c-3 0-5.5.5-7 2z"/><path d="M12 7v14"/></svg> Algorithmes</a>
+    </nav>
+    <div class="arena-top-right">
+      <div class="conn" id="connStatus"><span class="dot"></span><span id="connText">Connexion…</span></div>
+      <div class="countdown" id="countdown" title="Prochain tournoi">
+        <span class="cd-label">Prochain tournoi</span>
+        <span class="cd-value" id="cdValue">—:—:—</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="arena-main">
+
+    <!-- BARRE D'OUTILS : titre + actions -->
+    <div class="arena-toolbar">
+      <h2>Classement en direct</h2>
+      <div class="arena-tools-right">
+        <span class="progress" id="arenaProgress"></span>
+        <button id="triggerBtn" class="btn-ghost" title="Lancer un tournoi maintenant"><svg class="ctrl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Lancer maintenant</button>
+        <button id="submitOpen" class="btn-primary" title="Soumettre ma stratégie dans l'arène"><svg class="ctrl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Soumettre ma stratégie</button>
+      </div>
+    </div>
+
+    <div id="arenaStatus" class="arena-status idle">En attente du prochain tournoi…</div>
+
+    <div class="arena-ranking" id="arenaRanking">
+      <div class="empty">Connectez-vous pour voir le classement en direct<br>(1er → dernier, mis à jour en temps réel).</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal de soumission à l'arène en ligne (nom, algo, icône, code C#). -->
+<div id="submitModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="submitTitle">
+  <div class="modal-card submit-card">
+    <div class="modal-head">
+      <h2 id="submitTitle">Soumettre à l'arène en ligne</h2>
+      <button id="submitClose" class="icon-btn" aria-label="Fermer" title="Fermer">✕</button>
+    </div>
+    <div class="submit-body">
+      <div class="submit-row">
+        <label class="submit-field">
+          <span>Votre nom</span>
+          <input id="playerName" type="text" maxlength="24" placeholder="ex. Ada" autocomplete="off" />
+        </label>
+        <label class="submit-field">
+          <span>Nom de l'algorithme</span>
+          <input id="algoName" type="text" maxlength="32" placeholder="ex. SweetTooth" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="submit-field">
+        <span>Icône de l'algorithme <em class="submit-muted">(choix requis)</em></span>
+        <div class="submit-grid" id="iconGrid" role="radiogroup" aria-label="Choisir une icône"></div>
+      </div>
+
+      <div class="submit-field">
+        <span>Code C# <em class="submit-muted">· exécuté sur le serveur</em></span>
+        <textarea id="submitCode" class="submit-code" spellcheck="false" autocomplete="off" aria-label="Code de la stratégie en C#"></textarea>
+      </div>
+
+      <p class="submit-hint">Votre code affronte tous les autres joueurs <strong>et</strong> les 19 algorithmes de référence en round-robin (self-play inclus), sur les manches de 63, 77, 151, 156 et 308 tours. Classement du 1er au dernier, recalculé chaque heure.</p>
+      <div id="submitError" class="submit-error hidden"></div>
+    </div>
+    <div class="submit-foot">
+      <button id="submitCancel" class="btn-ghost">Annuler</button>
+      <button id="submitConfirm" class="btn-primary">Entrer dans l'arène en ligne</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications de soumission (fun & fluide) -->
+<div id="arenaToasts" class="arena-toasts" aria-live="polite"></div>
+<div id="statusBanner"></div>
+
+<!-- Modal : matchs joués par une stratégie (duels réels du tournoi) au clic sur une ligne. -->
+<div id="duelsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="duelsTitle">
+  <div class="modal-card duels-card">
+    <div class="modal-head">
+      <h2 id="duelsTitle">Matchs joués</h2>
+      <button id="duelsClose" class="icon-btn" aria-label="Fermer" title="Fermer">✕</button>
+    </div>
+    <div id="duelsBody" class="duels-body"></div>
+  </div>
+</div>
+
+<!-- Modal : animation d'un match (builtin vs builtin) — réutilise sim.js. -->
+<div id="simModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="simTitle">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="simTitle">Simulation de match</h2>
+      <button id="simClose" class="icon-btn" aria-label="Fermer la simulation" title="Fermer">✕</button>
+    </div>
+    <div class="sim-controls">
+      <button id="simPlay" class="btn-ghost sim-prim" aria-label="Lecture ou pause" title="Lecture / Pause">▶︎</button>
+      <button id="simRestart" class="btn-ghost" aria-label="Recommencer le match" title="Recommencer">↻</button>
+      <label class="sim-field"><span>Vitesse</span><select id="simSpeed"></select></label>
+      <label class="sim-field"><span>Longueur</span><select id="simLength"></select></label>
+      <label class="sim-field"><span>Graine</span>
+        <div class="seed-row">
+          <input id="simSeed" type="number" min="1" step="1" value="1" inputmode="numeric" />
+          <button id="simSeedRand" class="icon-btn" aria-label="Graine aléatoire" title="Graine aléatoire"><svg class="ctrl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></button>
+        </div>
+      </label>
+    </div>
+    <div id="simCanvas" class="sim-canvas" role="img" aria-label="Animation du match tour par tour"></div>
+    <div id="simStatus" class="sim-status" aria-live="polite"></div>
+  </div>
+</div>
+
+<script type="module" src="js/arena.js"></script>
+</body>
+</html>

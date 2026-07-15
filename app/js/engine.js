@@ -182,7 +182,7 @@ export async function roundRobin(strategies, { lengths = LENGTHS, reps = 1, onPr
         }
       }
       done++;
-      if (onProgress) onProgress(done, totalPairs, stats);
+      if (onProgress) await onProgress(done, totalPairs, stats);
     }
   }
 

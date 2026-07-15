@@ -20,10 +20,12 @@
 <div class="app">
 
   <header class="topbar">
-    <div class="brand">
-      <span class="title">Iterated Prisoner's Dilemma</span>
-      <span class="sub">Tournament Arena</span>
-    </div>
+    <nav class="tabbar" aria-label="Navigation principale">
+      <a class="tabbar-brand" href="index.html">PD Arena</a>
+      <a class="tabbar-tab active" data-tab="solo" href="index.html" aria-current="page"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="6"/><path d="M6 12h4M8 10v4"/><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="13" r="1" fill="currentColor" stroke="none"/></svg> Solo</a>
+      <a class="tabbar-tab" data-tab="online" href="arena.html"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Arène en ligne</a>
+      <a class="tabbar-tab" data-tab="codex" href="index.html#codex"><svg class="tabbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7c-1.5-1.5-4-2-7-2v14c3 0 5.5.5 7 2 1.5-1.5 4-2 7-2V5c-3 0-5.5.5-7 2z"/><path d="M12 7v14"/></svg> Algorithmes</a>
+    </nav>
     <div class="status" id="engineStatus"><span class="dot"></span><span id="engineStatusText">Initialisation…</span></div>
   </header>
 
@@ -42,7 +44,10 @@
         <div id="monacoWrap"><div id="monaco"></div></div>
         <div class="editor-foot">
           <p class="hint">Votre code affronte les 19 algorithmes de référence en round-robin (chacun contre tous, self-play inclus), sur les manches de 63, 77, 151, 156 et 308 tours. Classement du premier au dernier. <strong>Cliquez une ligne du classement pour visualiser le match animé.</strong></p>
-          <button id="runBtn" class="btn-primary">Entrer dans l'arène</button>
+          <div class="foot-actions">
+            <button id="soloSubmitBtn" class="btn-arena" title="Soumettre ma stratégie dans l'arène en ligne"><svg class="ctrl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg> Soumettre ma stratégie</button>
+            <button id="runBtn" class="btn-primary">Entrer dans l'arène</button>
+          </div>
         </div>
       </div>
     </section>
@@ -53,10 +58,10 @@
         <div class="tabs view-tabs">
           <button id="tabRanking" class="tab active" aria-selected="true">Classement</button>
           <button id="tabDuels" class="tab" aria-selected="false">Duels</button>
-          <button id="tabCodex" class="tab" aria-selected="false">Algorithmes</button>
         </div>
         <span class="progress" id="progress"></span>
       </div>
+      <div class="live-bar hidden" id="liveBar"><div class="live-bar-fill" id="liveBarFill"></div></div>
       <div class="pane-body">
         <div id="summary" class="summary hidden"></div>
         <div class="ranking" id="ranking">
@@ -106,10 +111,11 @@
       <label class="sim-field"><span>Graine</span>
         <div class="seed-row">
           <input id="simSeed" type="number" min="1" step="1" value="1" inputmode="numeric" />
-          <button id="simSeedRand" class="icon-btn" aria-label="Graine aléatoire" title="Graine aléatoire">🎲</button>
+          <button id="simSeedRand" class="icon-btn" aria-label="Graine aléatoire" title="Graine aléatoire"><svg class="ctrl-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/></svg></button>
         </div>
       </label>
     </div>
+    <div id="simDuel" class="sim-duel" aria-live="polite"></div>
     <div id="simCanvas" class="sim-canvas" role="img" aria-label="Animation du match tour par tour"></div>
     <div id="simStatus" class="sim-status" aria-live="polite"></div>
   </div>

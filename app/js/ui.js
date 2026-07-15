@@ -18,10 +18,14 @@ let running = false;
 // Stratégie joueur cachée après un tournoi pour réutilisation dans la simulation.
 let cachedUserStrat = null;
 let cachedUserLang = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Head-to-head complet (matrice) rempli pendant le tournoi : pour chaque paire
 // (i<=j) on agrège scores/issue sur les 5 longueurs. Permet d'afficher les
 // duels de N'IMPORTE QUEL algorithme, pas seulement le joueur.
 let h2hMatrix = {};
+// Rendu live du classement (chargement step-by-step pendant le tournoi).
+let liveRows = {};        // index -> élément <tr> (diff-update, comme arena.js)
+let prevLiveRanks = {};   // index -> rang précédent (animation de remontée)
 const STRAT_COUNT = 1 + BUILTIN.length; // Vous + 19 = 20
 let duelViewpoint = 0; // index de la stratégie dont on regarde les duels
 let currentView = 'ranking';
@@ -209,6 +213,69 @@ function buildDuels(v) {
   return out;
 }
 
+// Classement LIVE (chargement step-by-step pendant le tournoi) :
+// diff-update + réordonnancement fluide des <tr> + animation de remontée de rang.
+// N'affiche que les stratégies ayant déjà joué au moins un match => apparition
+// progressive au fil des paires.  Cohérent avec le rendu final (renderRanking).
+function renderLiveRanking(stats) {
+  const played = stats
+    .map((s) => ({ ...s, avgPerTurn: s.totalTurns ? s.totalScore / s.totalTurns : 0 }))
+    .filter((s) => s.matches > 0);
+  played.sort((a, b) => b.avgPerTurn - a.avgPerTurn || b.totalScore - a.totalScore);
+  played.forEach((s, i) => { s.rank = i + 1; });
+
+  let tbody = $('ranking').querySelector('table.standings tbody');
+  if (!tbody) {
+    $('ranking').innerHTML = `
+      <table class="standings live">
+        <thead><tr><th>#</th><th>Stratégie</th><th>Score / tour</th><th>Total</th><th>V · E · D</th></tr></thead>
+        <tbody></tbody>
+      </table>`;
+    tbody = $('ranking').querySelector('table.standings tbody');
+    liveRows = {};
+  }
+
+  const maxAvg = Math.max(...played.map((s) => s.avgPerTurn), 0.0001);
+
+  played.forEach((s) => {
+    let tr = liveRows[s.index];
+    const isNew = !tr;
+    if (isNew) {
+      tr = document.createElement('tr');
+      tr.dataset.stratidx = s.index;
+      tbody.appendChild(tr);
+      liveRows[s.index] = tr;
+    }
+
+    const prev = prevLiveRanks[s.index];
+    const flashed = !isNew && prev != null && s.rank < prev;
+    prevLiveRanks[s.index] = s.rank;
+
+    const pct = Math.round((s.avgPerTurn / maxAvg) * 100);
+    const rankCls = s.rank <= 3 ? 'top' : '';
+    const rowCls = s.isUser ? 'user' : '';
+    tr.className = `${rowCls}${isNew ? ' row-in' : ''}`;
+    tr.innerHTML = `
+      <td class="rank-cell ${rankCls}">${s.rank}</td>
+      <td class="name-cell">${stratChip(s.index)}</td>
+      <td>
+        <div class="score-cell">${fmt(s.avgPerTurn)}</div>
+        <div class="bar-track" style="margin-top:6px"><div class="bar-fill ${s.isUser ? 'user' : ''}" style="width:${pct}%"></div></div>
+      </td>
+      <td class="num">${s.totalScore}</td>
+      <td class="num">${s.wins} · ${s.ties} · ${s.losses}</td>`;
+
+    if (isNew) { tr.classList.remove('row-in'); void tr.offsetWidth; tr.classList.add('row-in'); }
+    if (flashed) { tr.classList.remove('row-flashed'); void tr.offsetWidth; tr.classList.add('row-flashed'); }
+  });
+
+  // Réordonne selon le classement courant (déplacement fluide des <tr> existants).
+  played.forEach((s) => {
+    const tr = liveRows[s.index];
+    if (tr) tbody.appendChild(tr);
+  });
+}
+
 function renderRanking(stats) {
   const maxAvg = Math.max(...stats.map((s) => s.avgPerTurn), 0.0001);
   const userStat = stats.find((s) => s.isUser);
@@ -315,9 +382,11 @@ function setView(v) {
   currentView = v;
   const tabs = { ranking: 'tabRanking', duels: 'tabDuels', codex: 'tabCodex' };
   for (const [key, id] of Object.entries(tabs)) {
+    const el = $(id);
+    if (!el) continue;            // #tabCodex n'existe plus en sous-onglet (nav navbar)
     const active = key === v;
-    $(id).classList.toggle('active', active);
-    $(id).setAttribute('aria-selected', String(active));
+    el.classList.toggle('active', active);
+    el.setAttribute('aria-selected', String(active));
   }
   $('ranking').classList.toggle('hidden', v !== 'ranking');
   $('duels').classList.toggle('hidden', v !== 'duels');
@@ -325,6 +394,23 @@ function setView(v) {
   $('codex').classList.toggle('hidden', v !== 'codex');
   $('summary').classList.toggle('hidden', !(v === 'ranking' && summaryVisible));
   if (v === 'duels') renderDuels(duelViewpoint);
+  syncTabbar(v);
+}
+
+// Synchronise l'onglet actif de la tabbar globale (Solo / Arène en ligne /
+// Algorithmes) avec la vue courante. "Solo" couvre ranking+duels ; "Algorithmes"
+// correspond à la vue codex (onglet navbar, plus de sous-onglet in-pane).
+// (L'onglet "Arène en ligne" est sur arena.html.)
+function syncTabbar(view) {
+  const set = (sel, on) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.classList.toggle('active', on);
+    if (on) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
+  };
+  set('.tabbar-tab[data-tab="solo"]', view !== 'codex');
+  set('.tabbar-tab[data-tab="codex"]', view === 'codex');
 }
 
 // ------------------------- VUE ALGORITHMES (CODEX) ---------------------
@@ -419,15 +505,33 @@ async function runTournament() {
   $('summary').classList.add('hidden');
   $('ranking').innerHTML = '<div class="empty">Tournoi en cours…</div>';
   $('duels').innerHTML = '<div class="empty">Tournoi en cours…</div>';
-  $('progress').textContent = `0 / ${totalPairs} paires`;
+  liveRows = {}; prevLiveRanks = {};
+  // Barre de progression live (chargement step-by-step).
+  $('liveBar').classList.remove('hidden');
+  $('liveBarFill').style.width = '0%';
+  $('progress').innerHTML = `<span class="live-dot"></span>0 / ${totalPairs} paires`;
 
   // Accumule la matrice head-to-head complète (toutes paires i<=j).
   h2hMatrix = {};
+  // Cadence du rendu live : ~28 rafraîchis répartis sur le tournoi (fluide,
+  // pas bavand). + petit sleep pour laisser le navigateur peindre (le C# est
+  // instant sinon — aucun rendu step-by-step visible).
+  const emitEvery = Math.max(1, Math.floor(totalPairs / 28));
+  const paceMs = 22;
+  let lastRender = -1;
   try {
     const stats = await roundRobin(strategies, {
       lengths: LENGTHS,
       reps: 1,
-      onProgress: (done, total) => { $('progress').textContent = `${done} / ${total} paires`; },
+      onProgress: async (done, total, st) => {
+        $('progress').innerHTML = `<span class="live-dot"></span>${done} / ${total} paires`;
+        $('liveBarFill').style.width = `${Math.round((done / total) * 100)}%`;
+        const shouldRender = done === 1 || done === total || done - lastRender >= emitEvery;
+        if (!shouldRender) return;
+        lastRender = done;
+        renderLiveRanking(st);
+        await sleep(paceMs);
+      },
       onResult: (i, j, len, res) => {
         const e = h2hMatrix[`${i}-${j}`] || (h2hMatrix[`${i}-${j}`] = {
           aScore: 0, bScore: 0, turns: 0, aWins: 0, ties: 0, bWins: 0,
@@ -448,6 +552,7 @@ async function runTournament() {
     $('progress').textContent = 'Erreur';
     showBanner(`Erreur d'exécution : <code>${e.message}</code>`, 'err', 14000);
   } finally {
+    $('liveBar').classList.add('hidden');
     setRunning(false);
   }
 }
@@ -482,6 +587,41 @@ async function strategyObj(index) {
   return BUILTIN[index - 1];
 }
 
+// Affiche le duel RÉEL joué pendant le tournoi (scores agrégés sur les 5 manches)
+// pour la paire (aIdx, bIdx). Complète l'animation : on voit « la partie qu'il a
+// jouée » et on peut la simuler. Self-play exclu du tournoi => message dédié.
+function renderSimDuel(aIdx, bIdx) {
+  const el = $('simDuel');
+  if (!el) return;
+  if (aIdx === bIdx) {
+    el.innerHTML = `<span class="sim-duel-label">Tournoi</span><span class="sim-duel-none">Affrontement miroir — non joué en tournoi (self-play exclu). Simulez-le ci-dessous.</span>`;
+    return;
+  }
+  const [a, b] = aIdx < bIdx ? [aIdx, bIdx] : [bIdx, aIdx];
+  const e = h2hMatrix[`${a}-${b}`];
+  if (!e) {
+    el.innerHTML = `<span class="sim-duel-label">Tournoi</span><span class="sim-duel-none">Lancez d'abord « Entrer dans l'arène » pour voir le duel réel, puis simulez-le.</span>`;
+    return;
+  }
+  // Du point de vue A (aIdx) : son score est aScore si aIdx===a sinon bScore.
+  const aIsA = aIdx === a;
+  const scoreA = aIsA ? e.aScore : e.bScore;
+  const scoreB = aIsA ? e.bScore : e.aScore;
+  const winsA = aIsA ? e.aWins : e.bWins;
+  const winsB = aIsA ? e.bWins : e.aWins;
+  const verdictCls = scoreA > scoreB ? 'win' : scoreA < scoreB ? 'loss' : 'tie';
+  const verdictTxt = scoreA > scoreB ? 'Victoire' : scoreA < scoreB ? 'Défaite' : 'Égalité';
+  const avgA = (scoreA / e.turns).toFixed(2);
+  el.innerHTML =
+    `<span class="sim-duel-label">Tournoi <span class="sim-duel-badge ${verdictCls}">${verdictTxt}</span></span>` +
+    `<span class="sim-duel-scores">` +
+      `<span class="sim-duel-side a">${iconFor(aIdx)} ${esc(strategyMeta(aIdx).name)} <b>${scoreA}</b> <i>${avgA}/tour</i></span>` +
+      `<span class="sim-duel-vs">·</span>` +
+      `<span class="sim-duel-side b">${iconFor(bIdx)} ${esc(strategyMeta(bIdx).name)} <b>${scoreB}</b></span>` +
+    `</span>` +
+    `<span class="sim-duel-meta">${e.turns} tours · ${winsA}V ${e.ties}E ${winsB}D · simulez ci-dessous ▾</span>`;
+}
+
 async function openSim(aIdx, bIdx, { focusPlay = true } = {}) {
   let A, B;
   try { A = await strategyObj(aIdx); B = await strategyObj(bIdx); }
@@ -508,6 +648,7 @@ async function openSim(aIdx, bIdx, { focusPlay = true } = {}) {
   $('simTitle').innerHTML = `${iconFor(aIdx)}<span class="strat-name">${esc(nameA)}</span>${kindBadgeFor(aIdx)}` +
     ` <span class="vs">vs</span> ` +
     `${iconFor(bIdx)}<span class="strat-name">${esc(nameB)}</span>${kindBadgeFor(bIdx)}`;
+  renderSimDuel(aIdx, bIdx);
   if (!sim) {
     sim = new MatchSim($('simCanvas'), { onStatus: (t) => { $('simStatus').textContent = t; refreshPlayBtn(); } });
   }
@@ -630,6 +771,22 @@ function setupSim() {
   });
 }
 
+// ----------------------------- SOUMISSION À L'ARÈNE EN LIGNE ----------
+// Le bouton "Soumettre ma stratégie" vit dans la section code de Solo.
+// Il porte le code C# en cours vers le modal de l'arène en ligne (arena.html).
+function submitToArena() {
+  // L'arène en ligne compile du C# côté serveur (classe `Player`).
+  if (lang !== 'csharp') {
+    setLang('csharp');
+    showBanner("L'arène en ligne compile du <strong>C#</strong>. Voici le modèle — adaptez votre stratégie, puis cliquez à nouveau pour la soumettre.", 'err', 9000);
+    return;
+  }
+  const code = monacoEditor.getValue();
+  if (!code.trim()) { showBanner('Le code de la stratégie est vide.', 'err'); return; }
+  try { sessionStorage.setItem('arenaSubmitCode', code); } catch (e) { /* stockage indisponible */ }
+  location.href = 'arena.html?submit';
+}
+
 // ----------------------------- INIT -----------------------------------
 async function main() {
   await monacoReady;
@@ -638,11 +795,15 @@ async function main() {
   $('langPython').onclick = () => setLang('python');
   $('langCsharp').onclick = () => setLang('csharp');
   $('runBtn').onclick = runTournament;
+  $('soloSubmitBtn').onclick = submitToArena;
   $('tabRanking').onclick = () => setView('ranking');
   $('tabDuels').onclick = () => setView('duels');
-  $('tabCodex').onclick = () => setView('codex');
+  // « Algorithmes » n'a plus de sous-onglet in-pane : on y accède via l'onglet
+  // navbar (index.html#codex) qui recharge la page → setView('codex') au boot.
   renderCodex();
   setupSim();
+  // Vue initiale : #codex → Algorithmes, sinon Solo (classement).
+  setView(location.hash === '#codex' ? 'codex' : 'ranking');
 
   // Cmd/Ctrl+Enter lance le tournoi.
   document.addEventListener('keydown', (e) => {
