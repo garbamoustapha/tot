@@ -38,6 +38,20 @@ desktop.ini
 .claude/settings.local.json
 .claude/projects/
 
+# --- Secrets : chaîne de connexion SQL (déployée mais jamais commitée) ---
+backend/PdArena/appsettings.json
+backend/PdArena/appsettings.*.json
+
+# --- Secrets de déploiement (FTP MonsterASP) : jamais commités ---
+.claude/skills/deploy-pdarena/deploy.env
+**/deploy.env
+
+# --- Build/publish artifacts .NET ---
+backend/PdArena/bin/
+backend/PdArena/obj/
+backend/PdArena/publish/
+backend/PdArena/wwwroot/
+
 # --- Logs / temp ---
 *.log
 tmp/

@@ -40,6 +40,16 @@
     "SubmittedAt": "2026-07-14T17:57:24.172187Z"
   },
   {
+    "Id": "u_b5bf0638d79a",
+    "PlayerName": "Testeur",
+    "AlgoName": "MonAlgo",
+    "IconId": "rocket",
+    "IconGlyph": "\uD83D\uDE80",
+    "Code": "using System;\npublic class Player {\n  public int Decide(int o,int t,int ms,int os,double r,int ml){ if(t==1||o\u003C0) return 0; return o==1?1:0; }\n}",
+    "CodeHash": "b5bf0638d79abc3bef84bfe2efee7c8334a2beecd558fb636d099537d438aefd",
+    "SubmittedAt": "2026-07-14T21:37:36.1698004Z"
+  },
+  {
     "Id": "u_826a40ba936b",
     "PlayerName": "RT_Bot",
     "AlgoName": "RtEcho",
@@ -47,6 +57,6 @@
     "IconGlyph": "\u26A1",
     "Code": "using System; public class Player { public int Decide(int o,int t,int ms,int os,double r,int ml){ if(t==1||o\u003C0) return 0; return o; } }",
     "CodeHash": "826a40ba936bc0c67fe9808c1b08134b7a4129a08ab1e17edf922445d79033e5",
-    "SubmittedAt": "2026-07-14T21:13:00.1657442Z"
+    "SubmittedAt": "2026-07-14T21:37:53.2319932Z"
   }
 ]

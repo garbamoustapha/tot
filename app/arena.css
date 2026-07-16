@@ -4,9 +4,9 @@
 .arena-top-right { display: flex; align-items: center; gap: 22px; }
 .conn { font-size: 12px; color: var(--muted-2); display: flex; align-items: center; gap: 8px; }
 .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.conn .dot.on   { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.15); }
-.conn .dot.off  { background: #f43f5e; }
-.conn .dot.busy { background: #f59e0b; }
+.conn .dot.on   { background: var(--nice); box-shadow: 0 0 0 3px rgba(16,185,129,.15); }
+.conn .dot.off  { background: var(--mean); }
+.conn .dot.busy { background: var(--noisy); }
 
 .countdown {
   display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
@@ -15,8 +15,8 @@
 }
 .cd-label { font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
 .cd-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 18px; font-weight: 600;
-  color: #c7d2fe; font-variant-numeric: tabular-nums; }
-.countdown.imminent .cd-value { color: #f59e0b; animation: pulse 1s ease-in-out infinite; }
+  color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.countdown.imminent .cd-value { color: var(--noisy); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
 
 /* ----- Layout principal (colonne unique : classement plein écran) ----- */
@@ -64,7 +64,7 @@ main.arena-main {
   font-size: 20px; border-radius: 7px; cursor: pointer; position: relative;
   background: transparent; border: 1px solid transparent; transition: background .12s, transform .12s;
 }
-.submit-cell:hover { background: rgba(99,102,241,.10); transform: translateY(-1px); }
+.submit-cell:hover { background: var(--row-hover); transform: translateY(-1px); }
 .submit-cell[aria-checked="true"] {
   background: var(--accent-soft); border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
@@ -74,7 +74,7 @@ main.arena-main {
 .submit-code {
   width: 100%; min-height: 220px; resize: vertical;
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-  color: #cbd5e1; padding: 12px 14px; font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--code-text); padding: 12px 14px; font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-size: 12.5px; line-height: 1.55; tab-size: 4; white-space: pre;
   transition: border-color .15s, box-shadow .15s;
 }
@@ -86,12 +86,12 @@ main.arena-main {
 }
 .submit-hint strong { color: var(--muted-2); }
 .submit-error {
-  font-size: 12.5px; line-height: 1.5; color: #fca5a5;
-  background: rgba(244,63,94,.10); border: 1px solid rgba(244,63,94,.30);
+  font-size: 12.5px; line-height: 1.5; color: var(--danger-text);
+  background: var(--danger-bg); border: 1px solid var(--danger-border);
   border-radius: 7px; padding: 9px 12px;
 }
 .submit-error code {
-  background: rgba(0,0,0,.25); border-radius: 4px; padding: 1px 5px;
+  background: var(--neutral-hover); border-radius: 4px; padding: 1px 5px;
   font-family: 'JetBrains Mono', monospace; font-size: 11px;
 }
 
@@ -108,15 +108,15 @@ main.arena-main {
 .arena-status .spinner { width: 13px; height: 13px; border: 2px solid var(--border);
   border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.arena-status.running { color: #c7d2fe; background: rgba(99,102,241,.06); }
+.arena-status.running { color: var(--accent-text); background: var(--accent-soft); }
 .arena-status .status-icon { width: 13px; height: 13px; color: var(--muted-2); flex: none; }
 
 /* ----- Classement ----- */
 .arena-ranking { flex: 1; overflow: auto; padding: 6px 0 24px; }
 /* Lignes cliquables -> modal des matchs joués. */
 table.arena-standings tbody tr[data-id] { cursor: pointer; }
-table.arena-standings tbody tr[data-id]:hover td { background: rgba(99,102,241,.10); }
-table.arena-standings tbody tr.user[data-id]:hover td { background: rgba(99,102,241,.16); }
+table.arena-standings tbody tr[data-id]:hover td { background: var(--row-hover); }
+table.arena-standings tbody tr.user[data-id]:hover td { background: var(--row-hover-strong); }
 table.arena-standings { width: 100%; border-collapse: collapse; }
 table.arena-standings th {
   text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
@@ -125,29 +125,29 @@ table.arena-standings th {
 }
 table.arena-standings td { padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
 table.arena-standings tbody tr { transition: background .15s; }
-table.arena-standings tbody tr:hover { background: rgba(99,102,241,.05); }
-table.arena-standings tr.user { background: rgba(99,102,241,.08); }
-table.arena-standings tr.user:hover { background: rgba(99,102,241,.12); }
+table.arena-standings tbody tr:hover { background: var(--row-hover); }
+table.arena-standings tr.user { background: var(--row-hover); }
+table.arena-standings tr.user:hover { background: var(--row-hover-strong); }
 
 .rank-cell { width: 42px; font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--muted-2); }
 .rank-cell .crown { margin-right: 2px; display: inline-flex; vertical-align: -1px; filter: drop-shadow(0 0 4px rgba(250,204,21,.45)); }
-.rank-cell .crown-svg { width: 13px; height: 13px; color: #facc15; }
-.rank-cell.top1 { color: #facc15; }   /* or */
-.rank-cell.top2 { color: #cbd5e1; }   /* argent */
-.rank-cell.top3 { color: #f59e0b; }   /* bronze */
+.rank-cell .crown-svg { width: 13px; height: 13px; color: var(--gold); }
+.rank-cell.top1 { color: var(--gold); }     /* or */
+.rank-cell.top2 { color: var(--silver); }    /* argent */
+.rank-cell.top3 { color: var(--bronze); }    /* bronze */
 .strat-icon { font-size: 16px; margin-right: 8px; vertical-align: middle; }
 .strat-name { vertical-align: middle; }
 .player-name { color: var(--muted); font-size: 11px; }
 .you-badge, .kind-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; margin-left: 6px;
   border: 1px solid var(--border); white-space: nowrap; }
-.you-badge { color: #c7d2fe; border-color: rgba(99,102,241,.5); background: var(--accent-soft); }
-.kind-badge.kind-nice  { color: #10b981; border-color: rgba(16,185,129,.4); }
-.kind-badge.kind-mean  { color: #f43f5e; border-color: rgba(244,63,94,.4); }
-.kind-badge.kind-noisy { color: #f59e0b; border-color: rgba(245,158,11,.4); }
+.you-badge { color: var(--accent-text); border-color: rgba(99,102,241,.5); background: var(--accent-soft); }
+.kind-badge.kind-nice  { color: var(--nice); border-color: rgba(16,185,129,.4); }
+.kind-badge.kind-mean  { color: var(--mean); border-color: rgba(244,63,94,.4); }
+.kind-badge.kind-noisy { color: var(--noisy); border-color: rgba(245,158,11,.4); }
 
 .bar-track { height: 6px; border-radius: 3px; background: var(--bar); overflow: hidden; min-width: 70px; }
 .bar-fill  { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s cubic-bezier(.22,1,.36,1); }
-.bar-fill.user { background: #818cf8; }
+.bar-fill.user { background: var(--accent-2); }
 
 .score-cell { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
 .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted-2); }
@@ -159,7 +159,7 @@ table.arena-standings tr.user:hover { background: rgba(99,102,241,.12); }
 .toast {
   background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--accent);
   border-radius: 9px; padding: 12px 16px; min-width: 240px; max-width: 320px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.4); display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 10px 30px var(--shadow); display: flex; align-items: center; gap: 12px;
   animation: toast-in .35s cubic-bezier(.22,1,.36,1);
 }
 .toast .toast-icon { font-size: 22px; }
@@ -196,7 +196,7 @@ table.arena-duels .num { font-variant-numeric: tabular-nums; }
 .duels-action { width: 96px; text-align: right; }
 .duel-sim-btn {
   display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 500;
-  color: #c7d2fe; background: var(--accent-soft); border: 1px solid rgba(99,102,241,.35);
+  color: var(--accent-text); background: var(--accent-soft); border: 1px solid rgba(99,102,241,.35);
   border-radius: 6px; padding: 5px 10px; cursor: pointer; font-family: inherit; white-space: nowrap;
   transition: background .15s, border-color .15s;
 }

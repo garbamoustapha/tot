@@ -3,12 +3,17 @@
 // algorithmes de référence, puis le classement (1er -> dernier) s'affiche.
 import { roundRobin, LENGTHS } from './engine.js';
 import { BUILTIN, KIND_LABEL } from './builtin.js';
+import { CODEX_SOURCES } from './codex-sources.js';
 import { makePythonStrategy } from './python-runner.js';
 import { makeCsharpStrategy } from './cs-interpreter.js';
 import { TEMPLATE_PYTHON, TEMPLATE_CSHARP } from './templates.js';
 import { MatchSim, SPEEDS } from './sim.js';
 
 const $ = (id) => document.getElementById(id);
+
+// Nom du thème Monaco selon le mode clair/sombre courant (data-theme sur <html>).
+const monacoThemeName = () =>
+  document.documentElement.getAttribute('data-theme') === 'light' ? 'arena-light' : 'arena';
 
 let lang = 'python';
 let monacoEditor = null;
@@ -75,6 +80,20 @@ const monacoReady = new Promise((resolve) => {
         'editorCursor.background': '#0b1120',
       },
     });
+    // Variante claire — synchronisée avec le mode clair de l'app (data-theme).
+    monaco.editor.defineTheme('arena-light', {
+      base: 'vs', inherit: true,
+      rules: [{ token: '', foreground: '334155' }],
+      colors: {
+        'editor.background': '#f4f7fb', 'editorGutter.background': '#f4f7fb',
+        'editorLineNumber.foreground': '#94a3b8', 'editor.lineHighlightBackground': '#eef2f9',
+        'editorCursor.foreground': '#e11d48',
+        'editorCursor.background': '#f4f7fb',
+      },
+    });
+    // Applique le thème éditeur au chargement puis à chaque bascule clair/sombre.
+    monaco.editor.setTheme(monacoThemeName());
+    window.addEventListener('themechange', () => monaco.editor.setTheme(monacoThemeName()));
 
     const createWhenSized = () => {
       const wrap = $('monacoWrap');
@@ -90,7 +109,7 @@ const monacoReady = new Promise((resolve) => {
     const doCreate = () => {
       monacoModel = monaco.editor.createModel(TEMPLATE_PYTHON, 'python');
       monacoEditor = monaco.editor.create($('monaco'), {
-        model: monacoModel, theme: 'arena', fontSize: 13,
+        model: monacoModel, theme: monacoThemeName(), fontSize: 13,
         // JetBrains Mono est chargée en webfont. On laisse une police de fallback
         // fallback pour que le navigateur ait toujours une métrique utilisable.
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace",
@@ -393,6 +412,9 @@ function setView(v) {
   $('duelBar').classList.toggle('hidden', v !== 'duels');
   $('codex').classList.toggle('hidden', v !== 'codex');
   $('summary').classList.toggle('hidden', !(v === 'ranking' && summaryVisible));
+  // Mode « Algorithmes seul » : masque l'éditeur « Votre stratégie » et passe la
+  // vue codex en pleine largeur (voir injectCodexStyles). N'affecte que cette vue.
+  document.body.classList.toggle('codex-only', v === 'codex');
   if (v === 'duels') renderDuels(duelViewpoint);
   syncTabbar(v);
 }
@@ -418,33 +440,62 @@ function esc(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Construit le bloc de code (onglets Python / Fortran + <pre>) d'une stratégie.
+// Réutilisé par la modale de code. `src` = entrée CODEX_SOURCES, `py` = source
+// Python (repli sur l'impl JS si absente), `name` sert au libellé aria.
+function codeBlockHTML(src, py, name) {
+  const hasFortran = !!src.fortran;
+  const fortranTab = hasFortran
+    ? `<button class="code-tab" data-lang="fortran" role="tab" aria-selected="false">Fortran · ${esc(src.fortranFile)}</button>`
+    : `<span class="code-tab is-disabled" title="Stratégie classique d'Axelrod — pas de fichier Fortran d'origine dans TourExec">Fortran — n/a</span>`;
+  const fortranPre = hasFortran
+    ? `<pre class="algo-code hidden" data-lang="fortran"><code>${esc(src.fortran)}</code></pre>`
+    : '';
+  return `
+    <div class="algo-code-block">
+      <div class="algo-code-tabs" role="tablist" aria-label="Code de ${esc(name)}">
+        <button class="code-tab is-active" data-lang="py" role="tab" aria-selected="true">Python</button>
+        ${fortranTab}
+      </div>
+      <pre class="algo-code" data-lang="py"><code>${esc(py)}</code></pre>
+      ${fortranPre}
+    </div>`;
+}
+
 function renderCodex() {
-  const cards = BUILTIN.map((s, i) => {
+  const rows = BUILTIN.map((s, i) => {
     const m = s.meta;
     const kind = KIND_LABEL[m.type] || KIND_LABEL.nice;
-    const code = s.impl ? s.impl.toString() : '';
+    const src = CODEX_SOURCES[m.id] || {};
+    const origin = src.author ? esc(src.author) : '—';
+    const langTag = src.fortran ? 'Python · Fortran' : 'Python';
     return `
-      <article class="algo-card ${kind.cls}" data-kind="${m.type || 'nice'}">
-        <header class="algo-head">
+      <tr class="algo-row ${kind.cls}" data-kind="${m.type || 'nice'}" data-id="${m.id}">
+        <td class="algo-c-name">
           <span class="algo-icon" aria-hidden="true">${m.icon || '•'}</span>
-          <div class="algo-title">
+          <span class="algo-name-wrap">
             <span class="algo-name">${esc(m.name)}</span>
-            <span class="kind-badge ${kind.cls}">${kind.label}</span>
-          </div>
-        </header>
-        <p class="algo-behavior">${esc(m.behavior || m.desc || '')}</p>
-        <footer class="algo-foot">
+            <span class="algo-origin">${origin}</span>
+          </span>
+        </td>
+        <td class="algo-c-type"><span class="kind-badge ${kind.cls}">${kind.label}</span></td>
+        <td class="algo-c-desc">${esc(m.behavior || m.desc || '')}</td>
+        <td class="algo-c-actions">
           <button class="algo-sim-btn" data-stratidx="${i + 1}" title="Simuler le match animé contre ${esc(m.name)}">
             <span class="play-glyph" aria-hidden="true">▶</span> Simuler
           </button>
-          <details class="algo-code-wrap">
-            <summary>Code source</summary>
-            <pre class="algo-code"><code>${esc(code)}</code></pre>
-          </details>
-        </footer>
-      </article>`;
+          <button class="algo-code-btn" data-id="${m.id}" title="Voir le code de ${esc(m.name)}">
+            <span class="code-glyph" aria-hidden="true">&lt;/&gt;</span> Code
+            <span class="lang-hint">${langTag}</span>
+          </button>
+        </td>
+      </tr>`;
   }).join('');
   $('codex').innerHTML = `
+    <header class="codex-header">
+      <h1 class="codex-title">Algorithmes de référence</h1>
+      <p class="codex-note">Les 19 stratégies de référence, chacune avec sa description, son portage <strong>Python</strong> et — pour les 9 issues du moteur Axelrod — son <strong>original Fortran</strong> de TourExec. Encode : <code>0</code> = Coopérer · <code>1</code> = Trahir.</p>
+    </header>
     <div class="codex-toolbar">
       <div class="codex-filters" role="group" aria-label="Filtrer par type">
         <button class="kind-filter is-active" data-kind="all" aria-pressed="true">Tous</button>
@@ -454,9 +505,198 @@ function renderCodex() {
       </div>
       <span class="codex-count" id="codexCount"></span>
     </div>
-    <p class="codex-note">Encode : <code>0</code> = Coopérer · <code>1</code> = Trahir. Signature : <code>decide(opponentLastMove, currentTurn, myScore, opponentScore, randomValue, myLastMove)</code>. Cliquez « Simuler » pour visualiser le match contre cet algorithme.</p>
-    <div class="codex-grid">${cards}</div>`;
+    <div class="codex-table-wrap">
+      <table class="codex-table">
+        <thead><tr>
+          <th class="algo-c-name">Algorithme</th>
+          <th class="algo-c-type">Type</th>
+          <th class="algo-c-desc">Description</th>
+          <th class="algo-c-actions"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  injectCodexStyles();
   setCodexFilter('all');
+}
+
+// Bascule l'onglet de code (Python / Fortran) d'une carte algorithme.
+function switchCodeTab(tab) {
+  if (tab.classList.contains('is-disabled')) return;
+  const block = tab.closest('.algo-code-block');
+  if (!block) return;
+  const lang = tab.dataset.lang;
+  block.querySelectorAll('.code-tab').forEach((t) => {
+    const on = t === tab;
+    t.classList.toggle('is-active', on);
+    if (t.tagName === 'BUTTON') t.setAttribute('aria-selected', String(on));
+  });
+  block.querySelectorAll('.algo-code').forEach((pre) => {
+    pre.classList.toggle('hidden', pre.dataset.lang !== lang);
+  });
+}
+
+// Crée (une fois) la modale de code et branche fermeture + bascule d'onglets.
+function ensureCodeModal() {
+  let modal = $('codeModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'codeModal';
+  modal.className = 'modal hidden';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-labelledby', 'codeModalTitle');
+  modal.innerHTML = `
+    <div class="modal-card code-modal-card" role="document">
+      <div class="modal-head">
+        <h2 id="codeModalTitle"></h2>
+        <button id="codeModalClose" class="icon-btn" aria-label="Fermer" title="Fermer">✕</button>
+      </div>
+      <div class="code-modal-body" id="codeModalBody"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  const close = () => modal.classList.add('hidden');
+  modal.querySelector('#codeModalClose').addEventListener('click', close);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) return close();
+    const tab = e.target.closest('.code-tab');
+    if (tab) switchCodeTab(tab);
+  });
+  return modal;
+}
+
+// Ouvre la modale de code pour une stratégie (id = meta.id).
+function openCodeModal(id) {
+  const s = BUILTIN.find((b) => b.meta.id === id);
+  if (!s) return;
+  const m = s.meta;
+  const kind = KIND_LABEL[m.type] || KIND_LABEL.nice;
+  const src = CODEX_SOURCES[id] || {};
+  const py = src.py || (s.impl ? s.impl.toString() : '');
+  const modal = ensureCodeModal();
+  $('codeModalTitle').innerHTML =
+    `<span class="strat-icon" aria-hidden="true">${m.icon || '•'}</span>` +
+    `<span class="strat-name">${esc(m.name)}</span>` +
+    `<span class="kind-badge ${kind.cls}">${kind.label}</span>`;
+  const origin = src.author
+    ? `<p class="code-modal-origin"><span class="algo-author-label">Origine</span>${esc(src.author)}</p>` : '';
+  $('codeModalBody').innerHTML = origin + codeBlockHTML(src, py, m.name);
+  modal.classList.remove('hidden');
+}
+
+// Injecte (une seule fois) le CSS des onglets de code du codex. Fait via JS —
+// et non dans styles.css — pour ne pas entrer en conflit avec la session qui
+// retravaille le thème. On n'utilise que des variables CSS existantes, donc
+// l'apparence suit automatiquement les modes sombre et clair.
+function injectCodexStyles() {
+  if ($('codexTabsStyle')) return;
+  const style = document.createElement('style');
+  style.id = 'codexTabsStyle';
+  style.textContent = `
+    .algo-author { margin: -2px 0 0; font-size: 11px; color: var(--muted); line-height: 1.4; }
+    .algo-author-label {
+      display: inline-block; margin-right: 7px; padding: 1px 6px; border-radius: 4px;
+      font-size: 9px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+      color: var(--muted-2); background: var(--panel-2); border: 1px solid var(--border);
+    }
+    .algo-code-block { margin-top: 2px; display: flex; flex-direction: column; }
+    .algo-code-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+    .code-tab {
+      appearance: none; background: transparent; border: 0; border-bottom: 2px solid transparent;
+      padding: 5px 10px; margin-bottom: -1px; cursor: pointer; font-family: inherit;
+      font-size: 11px; font-weight: 500; color: var(--muted); letter-spacing: .02em;
+      transition: color .15s, border-color .15s;
+    }
+    .code-tab:hover:not(.is-disabled) { color: var(--muted-2); }
+    .code-tab.is-active { color: var(--accent-text, var(--text)); border-bottom-color: var(--accent, currentColor); }
+    .code-tab.is-disabled { cursor: default; color: var(--muted); opacity: .5; }
+    .algo-code-block .algo-code {
+      margin: 8px 0 0; max-height: none; font-size: 11.5px; line-height: 1.55;
+      overflow-x: auto;
+    }
+    .algo-code-block .algo-code code { white-space: pre; }
+    .algo-code.hidden { display: none; }
+
+    /* ===== Mode « Algorithmes seul » (body.codex-only) ===================
+       Masque l'éditeur « Votre stratégie » et donne toute la largeur au codex. */
+    body.codex-only main.workspace { grid-template-columns: 1fr; }
+    body.codex-only .workspace > .pane:first-child { display: none; }   /* éditeur */
+    body.codex-only .pane-head { display: none; }                        /* onglets Classement/Duels */
+    body.codex-only #codex { padding: 0; }
+    body.codex-only .codex-header,
+    body.codex-only .codex-toolbar,
+    body.codex-only .codex-table-wrap { max-width: 1200px; margin-inline: auto; }
+    body.codex-only .codex-header { padding: 28px 28px 4px; }
+    body.codex-only .codex-toolbar {
+      position: sticky; top: 0; z-index: 5; padding: 12px 28px;
+      background: var(--bg);
+      background: color-mix(in srgb, var(--bg) 90%, transparent);
+      backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); margin-bottom: 0;
+    }
+    body.codex-only .codex-table-wrap { padding: 8px 20px 44px; }
+    .codex-header { margin: 0; }
+    .codex-title {
+      margin: 0 0 8px; font-size: 22px; font-weight: 700; letter-spacing: -.01em;
+      color: var(--text); line-height: 1.15;
+    }
+    body.codex-only .codex-note { max-width: 860px; font-size: 12.5px; }
+
+    /* ===== Tableau des algorithmes ====================================== */
+    .codex-table-wrap { overflow-x: auto; }
+    .codex-table { width: 100%; border-collapse: collapse; }
+    .codex-table thead th {
+      text-align: left; font-size: 10px; font-weight: 600; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--muted);
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+    }
+    .codex-table tbody td {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      vertical-align: middle; font-size: 13px;
+    }
+    .codex-table tbody tr { transition: background .15s; }
+    .codex-table tbody tr:hover td { background: var(--row-hover, var(--panel-2)); }
+    /* liseré de couleur du type à gauche de chaque ligne */
+    .codex-table tbody tr.kind-nice  td:first-child { box-shadow: inset 3px 0 0 var(--nice); }
+    .codex-table tbody tr.kind-mean  td:first-child { box-shadow: inset 3px 0 0 var(--mean); }
+    .codex-table tbody tr.kind-noisy td:first-child { box-shadow: inset 3px 0 0 var(--noisy); }
+    /* filtrage par type : masque les lignes hors type sélectionné */
+    #codex[data-filter="nice"]  .codex-table tbody tr:not(.kind-nice),
+    #codex[data-filter="mean"]  .codex-table tbody tr:not(.kind-mean),
+    #codex[data-filter="noisy"] .codex-table tbody tr:not(.kind-noisy) { display: none; }
+
+    td.algo-c-name { display: flex; align-items: center; gap: 12px; min-width: 210px; }
+    .codex-table .algo-icon {
+      width: 36px; height: 36px; flex: none; border-radius: 9px; display: grid;
+      place-items: center; font-size: 18px; line-height: 1;
+      background: var(--panel-2); border: 1px solid var(--border);
+    }
+    .algo-name-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .codex-table .algo-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .algo-origin { font-size: 11px; color: var(--muted); }
+    .algo-c-desc { color: var(--muted-2); line-height: 1.5; max-width: 480px; }
+    .algo-c-actions { white-space: nowrap; text-align: right; }
+    .algo-c-actions .algo-code-btn {
+      display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; vertical-align: middle;
+      font-size: 12px; font-weight: 500; color: var(--muted-2);
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px;
+      padding: 6px 11px; cursor: pointer; font-family: inherit; white-space: nowrap;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .algo-c-actions .algo-code-btn:hover { color: var(--text); border-color: var(--border-strong); background: var(--bg); }
+    .algo-code-btn .code-glyph { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent-text); }
+    .algo-code-btn .lang-hint { font-size: 9px; color: var(--muted); border-left: 1px solid var(--border); padding-left: 6px; letter-spacing: .02em; }
+
+    /* ===== Modale de code =============================================== */
+    .code-modal-card { width: min(760px, 100%); }
+    .code-modal-body { padding: 14px 18px 18px; }
+    .code-modal-origin { margin: 0 0 10px; font-size: 11px; color: var(--muted); }
+    .code-modal-body .algo-code { max-height: 62vh; }
+
+    @media (max-width: 640px) {
+      .codex-table thead { display: none; }
+      .algo-c-desc { display: none; }
+    }`;
+  document.head.appendChild(style);
 }
 
 // Active un filtre de type dans le codex et met à jour le compteur de cartes.
@@ -764,10 +1004,18 @@ function setupSim() {
   $('codex').addEventListener('click', (e) => {
     const filter = e.target.closest('.kind-filter');
     if (filter) { setCodexFilter(filter.dataset.kind); return; }
+    const codeBtn = e.target.closest('.algo-code-btn[data-id]');
+    if (codeBtn) { e.preventDefault(); openCodeModal(codeBtn.dataset.id); return; }
     const btn = e.target.closest('.algo-sim-btn[data-stratidx]');
     if (!btn) return;
     e.preventDefault();
     openSim(0, parseInt(btn.dataset.stratidx, 10));
+  });
+  // Échap ferme la modale de code (si ouverte).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const cm = $('codeModal');
+    if (cm && !cm.classList.contains('hidden')) cm.classList.add('hidden');
   });
 }
 

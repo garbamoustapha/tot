@@ -13,6 +13,20 @@
   <ItemGroup>
     <!-- Compilation in-memory des stratégies C# soumises par les joueurs. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+    <!-- Persistance des stratégies dans SQL Server (MonsterASP databaseasp.net). -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+  </ItemGroup>
+
+  <!-- Le frontend (../../app) est publié dans wwwroot et servi par IIS en
+       production.  Content lié (Link) → copié tel quel vers output/publish sans
+       étape de copie séparée.  On exclut les artefacts de dev (tests, captures). -->
+  <ItemGroup>
+    <Content Include="..\..\app\**\*"
+             Exclude="..\..\app\**\test-*.mjs;..\..\app\**\*.png;..\..\app\**\monaco-test.html;..\..\app\README.md">
+      <Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

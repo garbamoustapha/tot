@@ -30,17 +30,31 @@ builder.Services.AddCors(opts =>
 
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<ArenaState>();
-builder.Services.AddSingleton<StrategyStore>(sp =>
-    new StrategyStore(Path.Combine(builder.Environment.ContentRootPath, "storage", "strategies.json")));
+
+// Persistance : SQL Server (MonsterASP databaseasp.net).  La chaîne de connexion
+// vient de ConnectionStrings:Default (appsettings.json) ou de la variable
+// d'environnement PDARENA_DB.  Aucun stockage fichier.
+var connStr = builder.Configuration.GetConnectionString("Default")
+    ?? Environment.GetEnvironmentVariable("PDARENA_DB")
+    ?? throw new InvalidOperationException(
+        "Chaîne de connexion SQL manquante : définir ConnectionStrings:Default ou PDARENA_DB.");
+builder.Services.AddSingleton<StrategyStore>(_ => new StrategyStore(connStr));
 builder.Services.AddHostedService<TournamentService>();
 
 var app = builder.Build();
 app.UseCors();
 
-// --- Fichiers statiques : sert le dossier ../../app (frontend SPA) ---
-// ContentRoot = D:\tot\backend\PdArena  →  ../..  =  D:\tot  →  /app
-var appDir = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", "app"));
-if (Directory.Exists(appDir))
+// --- Fichiers statiques : sert le frontend SPA ---
+// En développement    : ../../app          (D:\tot\backend\PdArena → D:\tot\app)
+// En production (IIS)  : ./wwwroot          (le frontend est copié dans wwwroot au publish)
+var appDir = new[]
+    {
+        Path.Combine(builder.Environment.ContentRootPath, "..", "..", "app"),
+        Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
+    }
+    .Select(Path.GetFullPath)
+    .FirstOrDefault(Directory.Exists);
+if (appDir is not null && Directory.Exists(appDir))
 {
     app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = new PhysicalFileProvider(appDir) });
     // En développement, on désactive le cache navigateur (no-cache = toujours
@@ -171,6 +185,13 @@ app.MapPost("/api/replay", (ReplayDto dto, StrategyStore store) =>
         iconA = a.Meta.Icon, iconB = b.Meta.Icon,
         isUserA = a.Meta.IsUser, isUserB = b.Meta.IsUser,
     });
+});
+
+// --- Diagnostic base de données (temporaire) : renvoie l'état de la connexion SQL. ---
+app.MapGet("/api/dbcheck", (StrategyStore store) =>
+{
+    var err = store.Diagnose();
+    return Results.Ok(new { ok = err is null, error = err });
 });
 
 app.MapHub<ArenaHub>("/arenaHub");
