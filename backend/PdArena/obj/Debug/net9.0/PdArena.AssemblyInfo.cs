@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PdArena")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+13dea1d49ff6503cb3a5260887055a6c1e75160b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+763be5a209ca40cb34b1882fdf53e5037c7c3a96")]
 [assembly: System.Reflection.AssemblyProductAttribute("PdArena")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PdArena")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

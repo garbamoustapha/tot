@@ -14,9 +14,15 @@
      ce qui ferait que p5 (UMD) s'enregistrerait comme module AMD au lieu de poser
      window.p5 (même pième que Chart.js). On charge p5 en premier. -->
 <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<!-- Client SignalR officiel (temps réel) — utilisé par le chat flottant.
+     Chargé AVANT le loader Monaco : signalr.min.js est un bundle UMD ; si l'AMD
+     `define` du loader Monaco existe déjà, il s'enregistrerait comme module AMD
+     au lieu de poser window.signalR (même piège que p5). -->
+<script src="js/vendor/signalr.min.js"></script>
 <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.css" />
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
 <link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="chat.css" />
 </head>
 <body>
 <div class="app">
@@ -132,5 +138,6 @@
 
 <script type="module" src="js/theme.js"></script>
 <script type="module" src="js/ui.js"></script>
+<script src="js/chat.js"></script>
 </body>
 </html>

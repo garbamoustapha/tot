@@ -39,6 +39,7 @@ var connStr = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
         "Chaîne de connexion SQL manquante : définir ConnectionStrings:Default ou PDARENA_DB.");
 builder.Services.AddSingleton<StrategyStore>(_ => new StrategyStore(connStr));
+builder.Services.AddSingleton<ChatStore>(_ => new ChatStore(connStr));
 builder.Services.AddHostedService<TournamentService>();
 
 var app = builder.Build();
@@ -194,6 +195,22 @@ app.MapGet("/api/dbcheck", (StrategyStore store) =>
     return Results.Ok(new { ok = err is null, error = err });
 });
 
+// ============================ CHAT ==========================================
+
+// --- Enregistrement d'un pseudo unique (une seule fois par joueur). ---
+// Renvoie un jeton d'appartenance à mémoriser côté client pour publier ensuite.
+app.MapPost("/api/chat/register", (ChatRegisterDto dto, ChatStore chat) =>
+{
+    var res = chat.Register(dto?.UserName);
+    return res.Ok
+        ? Results.Ok(new { ok = true, userName = ChatStore.Normalize(dto?.UserName), token = res.Token })
+        : Results.Json(new { ok = false, error = res.Error }, statusCode: StatusCodes.Status409Conflict);
+});
+
+// --- Historique récent du chat (fallback REST ; le hub l'envoie aussi à la connexion). ---
+app.MapGet("/api/chat/history", (ChatStore chat) => Results.Ok(new { messages = chat.Recent() }));
+
 app.MapHub<ArenaHub>("/arenaHub");
+app.MapHub<ChatHub>("/chatHub");
 
 app.Run();

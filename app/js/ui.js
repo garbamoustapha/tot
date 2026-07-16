@@ -1062,6 +1062,12 @@ async function main() {
   // Vue initiale : #codex → Algorithmes, sinon Solo (classement).
   setView(location.hash === '#codex' ? 'codex' : 'ranking');
 
+  // Depuis la page Solo, cliquer « Algorithmes » (index.html#codex) est une
+  // ancre same-page : pas de rechargement, donc on bascule la vue à la main.
+  window.addEventListener('hashchange', () => {
+    setView(location.hash === '#codex' ? 'codex' : 'ranking');
+  });
+
   // Cmd/Ctrl+Enter lance le tournoi.
   document.addEventListener('keydown', (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !running) runTournament();
