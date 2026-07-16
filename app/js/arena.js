@@ -66,6 +66,8 @@ let simPair = null;                // { aId, bId } du match animé courant
 
 // ----------------------------- INIT -----------------------------------
 async function main() {
+  // Chargement immédiat : squelette animé tant que les données ne sont pas là.
+  setRankingState('loading');
   await loadIcons();
   bindSubmitModal();
   bindTrigger();
@@ -406,7 +408,10 @@ function connectHub() {
   hub.on('ReceiveHello', (hello) => {
     setConn('on', 'Connecté');
     if (hello?.duels) setDuels(hello.duels);
+    // Données disponibles -> on remplace le squelette de chargement.
     if (hello?.leaderboard?.length) renderLeaderboard(hello.leaderboard, true);
+    else if (hello?.status === 'running') setRankingState('running');
+    else setRankingState('empty');
     if (hello?.status === 'running') setStatus('running', 'Tournoi en cours…');
     updateCountdown(hello?.remainingSeconds ?? 0);
   });
@@ -420,7 +425,7 @@ function connectHub() {
     setStatus('running', `Tournoi #${id} — ${count} stratégies engagées…`);
     $('arenaProgress').textContent = `0 / ? paires`;
     prevRanks = {}; rowEls = {}; // reset pour l'animation du nouveau tournoi
-    $('arenaRanking').innerHTML = '';
+    setRankingState('running'); // squelette le temps des premières paires
   });
   hub.on('ReceiveProgress', (done, total, rows) => {
     $('arenaProgress').textContent = `${done} / ${total} paires`;
@@ -437,6 +442,7 @@ function connectHub() {
 
   hub.start().catch((e) => {
     setConn('off', 'Hors ligne');
+    setRankingState('offline');
     showBanner(`Connexion SignalR échouée : <code>${e}</code>. Le backend est-il démarré ?`, 'err', 12000);
   });
   hub.onreconnecting(() => setConn('busy', 'Reconnexion…'));
@@ -533,6 +539,38 @@ function renderLeaderboard(rows, isFinal) {
   Object.keys(rowEls).forEach((id) => {
     if (!seen.has(id)) { rowEls[id].remove(); delete rowEls[id]; }
   });
+}
+
+// État de la zone classement quand aucune donnée n'est encore affichable :
+// squelette animé (chargement/tournoi) ou message (vide/hors-ligne).
+function setRankingState(state) {
+  const host = $('arenaRanking');
+  if (!host) return;
+  rowEls = {}; // le tableau va être remplacé : on repart de zéro pour le diff
+  if (state === 'loading') {
+    host.innerHTML = skeletonHtml('Connexion à l\'arène — chargement du classement…');
+  } else if (state === 'running') {
+    host.innerHTML = skeletonHtml('Tournoi en cours — calcul des scores…');
+  } else if (state === 'empty') {
+    host.innerHTML = '<div class="empty">Aucun tournoi terminé pour l\'instant.<br>Le classement s\'affichera au prochain tournoi — ou lancez-le maintenant.</div>';
+  } else if (state === 'offline') {
+    host.innerHTML = '<div class="empty">Connexion à l\'arène impossible.<br>Vérifiez que le serveur est démarré — reconnexion automatique en cours…</div>';
+  }
+}
+
+// Squelette de classement (lignes grisées animées) affiché pendant l'attente.
+function skeletonHtml(label) {
+  const rows = Array.from({ length: 8 }, () => `
+    <div class="skel-row" aria-hidden="true">
+      <span class="skel skel-rank"></span>
+      <span class="skel skel-name"></span>
+      <span class="skel skel-bar"></span>
+      <span class="skel skel-num"></span>
+    </div>`).join('');
+  return `<div class="arena-loading" role="status" aria-live="polite">
+    <div class="arena-loading-head"><span class="spinner"></span><span>${esc(label)}</span></div>
+    <div class="skel-rows">${rows}</div>
+  </div>`;
 }
 
 function ensureTable() {

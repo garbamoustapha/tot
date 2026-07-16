@@ -281,6 +281,79 @@ table.standings tbody tr { transition: background .2s; }
   .hint { max-width: none; }
 }
 
+/* ============================================================================
+   Responsive — téléphones (≤640px). Le workspace passe en flux vertical
+   scrollable : l'éditeur reçoit une hauteur réelle, le classement suit en
+   dessous, et les actions passent en pleine largeur.
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Le conteneur n'est plus figé à 100vh : la page défile verticalement. */
+  .app { height: auto; min-height: 100vh; min-height: 100dvh; }
+  header.topbar { position: sticky; top: 0; z-index: 40; padding: 0 12px; height: 52px; }
+  .topbar-right { gap: 8px; }
+  .tabbar { gap: 0; }
+  .tabbar-tab { padding: 7px 8px; }
+  /* Le libellé de statut moteur est superflu sur mobile : on garde la puce. */
+  #engineStatusText { display: none; }
+  .status { gap: 0; }
+
+  /* Empilement des deux panneaux (éditeur puis classement). */
+  main.workspace { display: flex; flex-direction: column; height: auto; }
+  .pane { min-height: 0; }
+  .pane-head { padding: 12px 14px; }
+  /* Monaco a besoin d'une hauteur explicite hors layout figé. */
+  #monacoWrap { height: 56vh; min-height: 300px; }
+
+  /* Pied d'éditeur : indication au-dessus, boutons pleine largeur en dessous. */
+  .editor-foot { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px 14px; }
+  .foot-actions { flex-wrap: wrap; }
+  .foot-actions .btn-arena,
+  .foot-actions .btn-primary { flex: 1 1 auto; justify-content: center; text-align: center; }
+
+  /* Classement / duels / codex : hauteur naturelle, la page défile. */
+  .ranking, .duels, .codex { overflow: visible; }
+  .summary { gap: 18px; padding: 14px; }
+
+  /* Tables : cellules resserrées pour tenir sans scroll horizontal. */
+  table.standings th, table.standings td,
+  table.duels-table th, table.duels-table td { padding-left: 12px; padding-right: 12px; }
+  table.standings th, table.duels-table th { top: 52px; }
+  .bar-track { min-width: 44px; }
+
+  /* Duels : la barre garde une largeur minimale raisonnable. */
+  .duel-bar-view { padding: 11px 14px; }
+  #duelViewpoint { max-width: none; }
+
+  /* Codex : une carte par ligne. */
+  .codex-grid { grid-template-columns: 1fr; }
+  .codex { padding: 14px 14px 24px; }
+
+  /* Bandeau de statut : reste dans la fenêtre. */
+  #statusBanner { top: 60px; max-width: calc(100vw - 20px); }
+  .banner { max-width: 100%; }
+}
+
+/* ---- Modales : plein écran confortable sur petits écrans ---- */
+@media (max-width: 640px) {
+  .modal { padding: 10px; }
+  .modal-card { width: 100%; max-height: calc(100dvh - 20px); overflow-y: auto; }
+  .modal-head { padding: 12px 14px; }
+  .sim-controls, .sim-opponents { padding: 12px 14px; gap: 10px; }
+  .sim-opponents { flex-wrap: wrap; }
+  .sim-opponents .sim-field { flex: 1 1 130px; }
+  .sim-field select, .sim-field input { min-width: 0; }
+  .sim-status { padding: 10px 14px; }
+  .sim-duel { padding: 10px 14px; }
+  .sim-canvas { min-height: 220px; }
+}
+
+/* ---- Très petits écrans (≤380px) : compactage supplémentaire. ---- */
+@media (max-width: 380px) {
+  .tabbar-tab { padding: 6px 7px; }
+  .tabbar-icon { width: 14px; height: 14px; }
+  #monacoWrap { height: 52vh; }
+}
+
 /* ---------------------------- Vue Mes duels ------------------------------ */
 .duel-bar-view {
   display: flex; align-items: center; gap: 10px;
@@ -401,7 +474,7 @@ tr[data-stratidx]:hover .sim-cue { color: var(--accent-text); border-color: rgba
 .algo-code-wrap { min-width: 0; }
 .algo-code-wrap summary {
   cursor: pointer; font-size: 11px; color: var(--muted); letter-spacing: .04em;
-  list-style: none; user-select: none; white-space: nowrap;
+  list-style: none; -webkit-user-select: none; user-select: none; white-space: nowrap;
 }
 .algo-code-wrap summary:hover { color: var(--muted-2); }
 .algo-code-wrap summary::-webkit-details-marker { display: none; }
@@ -419,6 +492,7 @@ tr[data-stratidx]:hover .sim-cue { color: var(--accent-text); border-color: rgba
 .modal {
   position: fixed; inset: 0; z-index: 100;
   background: var(--overlay);
+  -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
