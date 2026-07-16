@@ -37,6 +37,9 @@ export function sanitizeMove(mv) {
 
 // Joue un match unique de `length` tours entre stratA et stratB.
 // opts = { rng, noise (0..1), onTurn(event), delayMs, signal }
+// onTurn peut être asynchrone : il est attendu après chaque tour, ce qui permet
+// à un visualiseur (sim.js) de cadencer/mettre en pause le match sans dupliquer
+// la boucle du moteur.
 export async function playMatch(stratA, stratB, length, opts = {}) {
   const rng = opts.rng || Math.random;
   const noise = opts.noise || 0;
@@ -98,7 +101,7 @@ export async function playMatch(stratA, stratB, length, opts = {}) {
     lastA = mA;
     lastB = mB;
 
-    if (opts.onTurn) opts.onTurn(ev, { instA, instB });
+    if (opts.onTurn) await opts.onTurn(ev, { instA, instB });
     if (opts.delayMs && opts.delayMs > 0) await sleep(opts.delayMs);
   }
 

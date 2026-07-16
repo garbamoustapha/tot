@@ -369,8 +369,9 @@ function renderDuels(viewpoint) {
     const diff = d.myScore - d.oppScore;
     const diffCls = diff > 0 ? 'pos' : diff < 0 ? 'neg' : 'neu';
     const diffTxt = diff > 0 ? `+${diff}` : `${diff}`;
+    const rowCls = diff < 0 ? 'loss' : '';
     return `
-      <tr data-a="${viewpoint}" data-b="${d.index}" title="Simuler le match animé">
+      <tr class="${rowCls}" data-a="${viewpoint}" data-b="${d.index}" title="Simuler le match animé">
         <td class="name-cell">${stratChip(d.index)}</td>
         <td class="duel-bar-cell">
           <div class="duel-bar">
@@ -957,6 +958,7 @@ function setupSim() {
     else sim.togglePause();
     refreshPlayBtn();
   };
+  $('simStep').onclick = () => { if (sim) { sim.step(); refreshPlayBtn(); } };
   $('simRestart').onclick = () => { if (sim) { sim.restart(); refreshPlayBtn(); } };
   $('simSpeed').onchange = (e) => { simSpeedMs = parseInt(e.target.value, 10); if (sim) sim.setSpeed(simSpeedMs); };
   $('simLength').onchange = (e) => { if (sim) { sim.length = parseInt(e.target.value, 10) || sim.length; sim.restart(); } };
@@ -983,6 +985,13 @@ function setupSim() {
         else sim.togglePause();
         refreshPlayBtn();
       }
+    }
+    // Flèche droite : avance d'un tour (pas-à-pas), sauf dans un champ de saisie.
+    if (e.key === 'ArrowRight' && !$('simModal').classList.contains('hidden')) {
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if (tag === 'INPUT' || tag === 'SELECT') return;
+      e.preventDefault();
+      if (sim) { sim.step(); refreshPlayBtn(); }
     }
   });
 

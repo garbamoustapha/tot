@@ -25,6 +25,7 @@
   --noisy: #f59e0b;
   --pos: #34d399;
   --neg: #fb7185;
+  --loss-bg: rgba(251, 113, 133, .10);
   --gold: #facc15;
   --silver: #cbd5e1;
   --bronze: #f59e0b;
@@ -62,6 +63,7 @@
   --noisy: #d97706;
   --pos: #059669;
   --neg: #e11d48;
+  --loss-bg: rgba(225, 29, 72, .08);
   --gold: #ca8a04;
   --silver: #64748b;
   --bronze: #b45309;
@@ -303,6 +305,7 @@ table.duels-table th {
 }
 table.duels-table td { padding: 11px 20px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
 table.duels-table tbody tr[data-stratidx] { cursor: pointer; }
+table.duels-table tbody tr.loss td { background: var(--loss-bg); }
 table.duels-table tbody tr[data-stratidx]:hover td { background: var(--row-hover); }
 .tab { font-variant-numeric: tabular-nums; }
 .duel-bar-cell { min-width: 150px; }

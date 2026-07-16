@@ -287,8 +287,9 @@ function duelsRowHtml(me, row) {
   const { opp, d, diff, avg } = row;
   const diffCls = diff > 0 ? 'pos' : diff < 0 ? 'neg' : 'neu';
   const diffTxt = diff > 0 ? `+${diff}` : `${diff}`;
+  const rowCls = diff < 0 ? 'loss' : '';
   const action = `<button class="duel-sim-btn" data-a="${esc(me.id)}" data-b="${esc(opp.id)}" title="Rejouer le match animé">▶ Simuler</button>`;
-  return `<tr>
+  return `<tr class="${rowCls}">
     <td><span class="strat-icon">${opp.icon || '•'}</span><span class="strat-name">${esc(opp.name)}</span>${badgeFor(opp)}</td>
     <td class="num">${d.myScore} <span class="duel-avg">${avg.toFixed(2)}/t</span></td>
     <td class="num">${d.oppScore}</td>
@@ -320,6 +321,7 @@ function setupArenaSim() {
     else sim.togglePause();
     refreshPlayBtn();
   };
+  $('simStep').onclick = () => { if (sim) { sim.step(); refreshPlayBtn(); } };
   $('simRestart').onclick = () => { if (sim) { sim.restart(); refreshPlayBtn(); } };
   $('simSpeed').onchange = (e) => { simSpeedMs = parseInt(e.target.value, 10); if (sim) sim.setSpeed(simSpeedMs); };
   $('simLength').onchange = (e) => { if (sim) { sim.length = parseInt(e.target.value, 10) || sim.length; sim.restart(); } };

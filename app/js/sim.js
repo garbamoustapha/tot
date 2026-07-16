@@ -2,14 +2,15 @@
 // --------------------------------------------------------------------------
 // Visualise un match tour-par-tour entre deux stratégies : jetons C/D animés,
 // scores cumulés, barres de score, frise temporelle des coups, badge de gain
-// (T/R/P/S). Pilote le moteur via les mêmes encodeurs que engine.js (PAYOFF,
-// sanitizeMove) mais boucle manuellement pour permettre play/pause/restart/
-// pas-à-pas. PRNG seedé (mulberry32) -> un match (graine, longueur) est
+// (T/R/P/S). Le match est joué par engine.playMatch (source unique de vérité :
+// mêmes gains, même consommation du PRNG, mêmes fautes/bruit que le tournoi) ;
+// sim.js ne fait que cadencer les tours via onTurn — play/pause/pas-à-pas/
+// restart. PRNG seedé (mulberry32) -> un match (graine, longueur) est
 // reproductible, dans l'esprit du skill algorithmic-art (variation paramétrée).
 //
 // Respecte prefers-reduced-motion : tween désactivé, pacing minimal.
 
-import { PAYOFF, sanitizeMove, COOPERATE, DEFECT } from './engine.js';
+import { playMatch, COOPERATE, DEFECT } from './engine.js';
 
 // Vitesse -> délai entre tours (ms). 0 = instantané.
 export const SPEEDS = [
@@ -32,6 +33,7 @@ function mulberry32(seed) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 const reducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia &&
@@ -103,8 +105,11 @@ export class MatchSim {
     this.stratA = null; this.stratB = null;
     this.nameA = ''; this.nameB = '';
     this.length = 77; this.seed = 1; this.speedMs = 200;
-    this.instA = null; this.instB = null;
-    this._gen = 0; // jeton de génération : un run s'arrête si sa génération est dépassée
+    this.noise = 0;
+    this._gen = 0;          // jeton de génération : un run s'arrête si sa génération est dépassée
+    this._abort = null;     // AbortController du run en cours
+    this._gateRelease = null; // résolveur de la pause en cours (resume/step/destroy)
+    this._stepPending = 0;  // nb de tours à jouer en mode pas-à-pas
     this._mounted = this._mount();
   }
 
@@ -126,92 +131,169 @@ export class MatchSim {
   }
 
   // Lance (ou relance) un match. Retourne une promesse qui se résout à la fin.
-  async play({ stratA, stratB, nameA, nameB, length, seed, speedMs }) {
+  // startPaused : démarre en pause après le premier tour (mode pas-à-pas).
+  async play({ stratA, stratB, nameA, nameB, length, seed, speedMs, noise = 0, startPaused = false }) {
     await this._mounted;
     this.stratA = stratA; this.stratB = stratB;
     this.nameA = nameA; this.nameB = nameB;
     this.length = length; this.seed = seed; this.speedMs = speedMs;
+    this.noise = noise;
     this._gen++; // invalide tout run précédent
     const gen = this._gen;
+    if (this._abort) this._abort.abort(); // stoppe le playMatch précédent
+    this._releaseGate();                  // débloque un éventuel run en pause
+    const ac = new AbortController();
+    this._abort = ac;
+    this._stepPending = 0;
     this.state = this._blank();
-    this.instA = await stratA.init();
-    this.instB = await stratB.init();
-    if (gen !== this._gen) return; // un nouveau play() a pris le relais pendant l'init
-    this.rng = mulberry32(seed);
-    this.lastA = -1; this.lastB = -1;
+    this.state.paused = startPaused;
     this.state.running = true;
     if (this.p5) this.p5.loop();
     this.onStatus(`${nameA} vs ${nameB} · ${length} tours · graine ${seed}`);
-    this._runLoop(gen);
+
+    let res;
+    try {
+      // Le moteur joue le match ; la simulation ne fait que cadencer les tours.
+      res = await playMatch(stratA, stratB, length, {
+        rng: mulberry32(seed),
+        noise,
+        signal: ac.signal,
+        onTurn: async (ev) => {
+          if (gen !== this._gen) return;
+          this._applyTurn(ev);
+          await this._gate(gen);
+        },
+      });
+    } catch (e) {
+      if (gen !== this._gen || ac.signal.aborted) return; // interrompu par restart/play/destroy
+      this.state.running = false;
+      this.onStatus(`Match interrompu : ${e.message}`);
+      return;
+    }
+    if (gen !== this._gen) return;
+    this._finish(res);
   }
 
-  async _runLoop(gen) {
-    while (this.state.running && !this.state.finished && gen === this._gen) {
-      if (this.state.paused) { await sleep(60); continue; }
-      await this._step();
-      if (gen !== this._gen) return; // interrompu par un restart/play
-      if (this.speedMs > 0 && !this.state.finished) await sleep(this.speedMs);
-    }
-    if (this.state.finished && gen === this._gen) {
-      const { scoreA, scoreB } = this.state;
-      const winner = scoreA > scoreB ? 'A' : scoreB > scoreA ? 'B' : 'DRAW';
-      this.state.result = { winner, scoreA, scoreB };
-      this.state.finishedAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      this.onStatus(
-        `Match terminé · ${this.nameA} ${scoreA} – ${scoreB} ${this.nameB} · ` +
-        (winner === 'A' ? 'victoire' : winner === 'B' ? 'défaite' : 'égalité'),
-      );
-      // Laisse tourner la boucle ~1,4 s pour animer le pop final + la bannière
-      // de victoire, puis fige le rendu (économie CPU) tout en gardant l'image.
-      if (this.p5) {
-        this.p5.loop();
-        const gen2 = this._gen;
-        setTimeout(() => { if (gen2 === this._gen && this.p5) this.p5.noLoop(); }, 1400);
-      }
-    }
-  }
-
-  async _step() {
+  // Applique l'événement de tour du moteur à l'état de rendu.
+  _applyTurn(ev) {
     const s = this.state;
-    const turn = s.turn + 1;
-    if (turn > this.length) { s.finished = true; s.running = false; return; }
+    s.turn = ev.turn;
+    s.mA = ev.mA; s.mB = ev.mB;
+    s.scoreA = ev.scoreA; s.scoreB = ev.scoreB;
+    s.lastGain = [ev.gainA, ev.gainB];
+    s.turnAt = now();
+    s.history.push(ev);
+    // Mode instantané : redraws regroupés (1 tour sur 12 + le dernier) pour
+    // ne pas payer 308 rendus synchrones.
+    const instant = this.speedMs === 0 && !s.paused && this._stepPending === 0;
+    if (this.p5 && (!instant || ev.turn === this.length || ev.turn % 12 === 0)) this.p5.redraw();
+  }
 
-    const ctxA = {
-      opponentLastMove: this.lastB, currentTurn: turn,
-      myScore: s.scoreA, opponentScore: s.scoreB,
-      randomValue: this.rng(), myLastMove: this.lastA,
-    };
-    const ctxB = {
-      opponentLastMove: this.lastA, currentTurn: turn,
-      myScore: s.scoreB, opponentScore: s.scoreA,
-      randomValue: this.rng(), myLastMove: this.lastB,
-    };
-    let rawA, rawB;
-    try { rawA = await this.stratA.decide(this.instA, ctxA); }
-    catch (e) { rawA = DEFECT; }
-    try { rawB = await this.stratB.decide(this.instB, ctxB); }
-    catch (e) { rawB = DEFECT; }
+  // Cadence entre deux tours : vitesse, pause, pas-à-pas. Sommeil découpé pour
+  // réagir immédiatement à un changement de vitesse / pause / step.
+  async _gate(gen) {
+    while (gen === this._gen) {
+      if (this._stepPending > 0) { this._stepPending--; return; } // avance d'un tour
+      if (this.state.paused) { this._idleFreeze(); await this._waitResume(); continue; }
+      const t0 = now();
+      if (this.speedMs <= 0) {
+        // Instantané : cède la main de temps en temps pour laisser respirer l'UI.
+        if (this.state.turn % 24 === 0) await sleep(0);
+        return;
+      }
+      while (gen === this._gen && !this.state.paused && this._stepPending === 0) {
+        const target = this.speedMs;
+        const elapsed = now() - t0;
+        if (target <= 0 || elapsed >= target) return;
+        await sleep(Math.min(50, target - elapsed));
+      }
+      // état changé pendant l'attente (pause ou step) : on ré-évalue
+    }
+  }
 
-    const sA = sanitizeMove(rawA), sB = sanitizeMove(rawB);
-    const mA = sA.move, mB = sB.move;
-    const [gA, gB] = PAYOFF[`${mA}${mB}`];
+  _waitResume() {
+    return new Promise((r) => { this._gateRelease = r; });
+  }
 
-    s.turn = turn;
-    s.mA = mA; s.mB = mB;
-    s.scoreA += gA; s.scoreB += gB;
-    s.lastGain = [gA, gB];
-    s.turnAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    s.history.push({ turn, mA, mB, gA, gB });
-    this.lastA = mA; this.lastB = mB;
-    if (this.p5) this.p5.redraw();
+  _releaseGate() {
+    if (this._gateRelease) { const r = this._gateRelease; this._gateRelease = null; r(); }
+  }
+
+  // Fige le rendu p5 après le tween si toujours en pause (économie CPU).
+  _idleFreeze(delay = 450) {
+    const gen = this._gen;
+    setTimeout(() => {
+      if (gen === this._gen && this.p5 && this.state.paused && this._stepPending === 0) {
+        this.p5.noLoop();
+      }
+    }, delay);
+  }
+
+  _finish(res) {
+    const s = this.state;
+    s.finished = true; s.running = false; s.paused = false;
+    const { scoreA, scoreB, winner, faultsA, faultsB } = res;
+    s.result = { winner, scoreA, scoreB };
+    s.finishedAt = now();
+    // Verdict relatif au joueur ("VOUS") quand il participe, neutre sinon.
+    const userA = !!this.stratA?.meta?.isUser;
+    const userB = !!this.stratB?.meta?.isUser;
+    const winName = winner === 'A' ? this.nameA : this.nameB;
+    let verdict;
+    if (winner === 'DRAW') verdict = 'égalité';
+    else if (userA && userB) verdict = `${winName} l'emporte`;
+    else if ((winner === 'A' && userA) || (winner === 'B' && userB)) verdict = 'victoire';
+    else if (userA || userB) verdict = 'défaite';
+    else verdict = `${winName} l'emporte`;
+    const faults =
+      (faultsA ? ` · ${faultsA} coup(s) invalide(s) — ${this.nameA}` : '') +
+      (faultsB ? ` · ${faultsB} coup(s) invalide(s) — ${this.nameB}` : '');
+    this.onStatus(`Match terminé · ${this.nameA} ${scoreA} – ${scoreB} ${this.nameB} · ${verdict}${faults}`);
+    // Laisse tourner la boucle ~1,4 s pour animer le pop final + la bannière
+    // de victoire, puis fige le rendu (économie CPU) tout en gardant l'image.
+    if (this.p5) {
+      this.p5.redraw();
+      this.p5.loop();
+      const gen2 = this._gen;
+      setTimeout(() => { if (gen2 === this._gen && this.p5) this.p5.noLoop(); }, 1400);
+    }
   }
 
   setSpeed(ms) { this.speedMs = ms; }
-  pause() { if (this.state.running) this.state.paused = true; }
-  resume() { this.state.paused = false; }
+
+  pause() {
+    if (!this.state.running || this.state.finished) return;
+    this.state.paused = true; // la porte de cadencement gèle le rendu (_idleFreeze)
+  }
+
+  resume() {
+    this.state.paused = false;
+    if (this.p5) this.p5.loop();
+    this._releaseGate();
+  }
+
   togglePause() { this.state.paused ? this.resume() : this.pause(); }
   isPaused() { return this.state.paused; }
   isRunning() { return this.state.running; }
+
+  // Avance d'exactement un tour. Si aucun match ne tourne (jamais lancé ou
+  // terminé), relance le même match en pause : le premier appui joue le tour 1.
+  step() {
+    if (!this.state.running || this.state.finished) {
+      if (!this.stratA) return;
+      this.play({
+        stratA: this.stratA, stratB: this.stratB,
+        nameA: this.nameA, nameB: this.nameB,
+        length: this.length, seed: this.seed, speedMs: this.speedMs,
+        noise: this.noise, startPaused: true,
+      });
+      return;
+    }
+    this.state.paused = true;
+    this._stepPending++;
+    if (this.p5) this.p5.loop();
+    this._releaseGate();
+  }
 
   // Redémarre le même match (même graine/longueur/stratégies).
   async restart() {
@@ -220,11 +302,14 @@ export class MatchSim {
       stratA: this.stratA, stratB: this.stratB,
       nameA: this.nameA, nameB: this.nameB,
       length: this.length, seed: this.seed, speedMs: this.speedMs,
+      noise: this.noise,
     });
   }
 
   destroy() {
     this._gen++; // stoppe tout run en cours
+    if (this._abort) this._abort.abort();
+    this._releaseGate();
     this.state.running = false;
     if (this.p5) { try { this.p5.remove(); } catch (e) {} }
     if (activeSim === this) activeSim = null;
